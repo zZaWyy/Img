@@ -29,22 +29,118 @@ llm:
 
 # Datos por restaurante. "match" debe coincidir (parcialmente, sin
 # mayúsculas) con el nombre de la ficha en Google Business Profile.
-# Las keywords son OPCIONALES: el prompt indica usar como mucho una o dos
-# y solo si encajan de forma natural — nunca las mete todas.
+# Las keywords son OPCIONALES y PROVISIONALES (revisar): el prompt indica
+# usar como mucho una o dos y solo si encajan de forma natural.
+#
+# NOTA: la ficha "Central UNICUM GROUP" (oficina) y las fichas duplicadas
+# quedan fuera a propósito. Las fichas cerradas permanentemente, también.
 restaurants:
+
+  # ---------- SANTA PONSA ----------
+
   - match: "Mercader del Mar"
     city: "Santa Ponsa"
     keywords:
-      - "pescado fresco"
-      - "terraza con vistas al mar"
-      - "cena romántica en Santa Ponsa"
-    notes: "Reforzar la idea de producto de mercado y atardeceres."
+      - "arroces y paellas"
+      - "pescado y marisco fresco"
+      - "terraza frente al mar en Santa Ponsa"
+    notes: "Reforzar producto de mercado, atardeceres y celebraciones."
 
-  - match: "Madre"
-    city: "Palma de Mallorca"
+  - match: "Alma Beach"
+    city: "Santa Ponsa"
     keywords:
-      - "cocina mediterránea"
-      - "tardeo en Palma"
+      - "steakhouse en Santa Ponsa"
+      - "cócteles junto a la playa"
+      - "pizza fina y crujiente"
     notes: ""
 
-  # Añade aquí el resto de restaurantes del grupo con el mismo formato.
+  - match: "Amira Great Kebab"
+    city: "Santa Ponsa"
+    keywords:
+      - "kebab en Santa Ponsa"
+      - "dürum"
+    notes: ""
+
+  - match: "Balcón de María"
+    city: "Santa Ponsa"
+    keywords:
+      - "pinchos y tapas en Santa Ponsa"
+      - "cócteles"
+    notes: ""
+
+  - match: "Madre Santa Pizza"
+    city: "Santa Ponsa"
+    keywords:
+      - "pizza en Santa Ponsa"
+      - "pasta fresca"
+      - "tiramisú casero"
+    notes: ""
+
+  - match: "Mestiza"
+    city: "Santa Ponsa"
+    keywords:
+      - "hamburguesa gourmet en Santa Ponsa"
+      - "prime steak"
+      - "pizza americana"
+    notes: ""
+
+  - match: "Pecado 24H"
+    city: "Santa Ponsa"
+    keywords:
+      - "delivery 24 horas en Santa Ponsa"
+      - "take away"
+    notes: "Es delivery/take away: agradecer también los pedidos a domicilio."
+
+  - match: "Playas del Rey"
+    city: "Santa Ponsa"
+    keywords:
+      - "terraza en Santa Ponsa"
+      - "cocina mediterránea"
+    notes: ""
+
+  - match: "Virtus Smash Burger"
+    city: "Santa Ponsa"
+    keywords:
+      - "smash burger en Santa Ponsa"
+      - "cervezas"
+    notes: ""
+
+  # ---------- PALMA DE MALLORCA ----------
+
+  - match: "Madre Café Bar"
+    city: "Palma de Mallorca"
+    keywords:
+      - "tapas y burger en Palma"
+      - "tardeo en Plaza Patines"
+    notes: ""
+
+  - match: "Madre Pizza"
+    city: "Palma de Mallorca"
+    keywords:
+      - "pizza artesana en Palma"
+      - "pasta fresca"
+      - "tiramisú casero"
+    notes: ""
+
+  # ---------- CERRADOS TEMPORALMENTE ----------
+  # Descomentar (quitar los #) cuando reabran:
+  #
+  # - match: "Padre Great Kebab"
+  #   city: "Palma de Mallorca"
+  #   keywords:
+  #     - "kebab en Plaza Patines"
+  #     - "sports bar en Palma"
+  #   notes: ""
+  #
+  # - match: "Padre Smash Burger"
+  #   city: "Palma de Mallorca"
+  #   keywords:
+  #     - "smash burger en Palma"
+  #     - "bocatas y birras"
+  #   notes: ""
+  #
+  # - match: "Perseverantia"
+  #   city: "Santa Ponsa"
+  #   keywords:
+  #     - "beach club en Santa Ponsa"
+  #   notes: ""
