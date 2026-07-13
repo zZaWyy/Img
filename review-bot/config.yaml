@@ -1,0 +1,50 @@
+# Configuración del bot de respuestas a reseñas — Unicum Group
+# Edita este archivo: es el único que hay que tocar en el día a día.
+
+timezone: Europe/Madrid
+
+# Ventana horaria en la que el bot publica respuestas (hora local).
+# Fuera de esta ventana el bot no publica nada, aunque haya reseñas pendientes.
+reply_window:
+  start_hour: 10   # desde las 10:00
+  end_hour: 21     # hasta las 21:00
+
+# Desfase mínimo entre que se publica la reseña y que el bot responde.
+min_delay_hours: 2
+
+# No responder reseñas más antiguas que esto (evita que en la primera
+# ejecución el bot responda de golpe a reseñas de hace meses).
+max_review_age_days: 30
+
+# Solo se responden reseñas con esta puntuación o superior.
+# Las de 1-3 estrellas NUNCA se tocan: se responden a mano.
+min_star_rating: 4
+
+# Máximo de respuestas publicadas por ejecución (freno de seguridad).
+max_replies_per_run: 5
+
+llm:
+  provider: gemini          # gemini (gratis) | anthropic
+  model: gemini-2.5-flash   # para anthropic: claude-sonnet-5
+
+# Datos por restaurante. "match" debe coincidir (parcialmente, sin
+# mayúsculas) con el nombre de la ficha en Google Business Profile.
+# Las keywords son OPCIONALES: el prompt indica usar como mucho una o dos
+# y solo si encajan de forma natural — nunca las mete todas.
+restaurants:
+  - match: "Mercader del Mar"
+    city: "Santa Ponsa"
+    keywords:
+      - "pescado fresco"
+      - "terraza con vistas al mar"
+      - "cena romántica en Santa Ponsa"
+    notes: "Reforzar la idea de producto de mercado y atardeceres."
+
+  - match: "Madre"
+    city: "Palma de Mallorca"
+    keywords:
+      - "cocina mediterránea"
+      - "tardeo en Palma"
+    notes: ""
+
+  # Añade aquí el resto de restaurantes del grupo con el mismo formato.
