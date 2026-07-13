@@ -29,6 +29,7 @@ class Config:
     llm_provider: str
     llm_model: str
     restaurants: list
+    excludes: list
 
     @property
     def dry_run(self) -> bool:
@@ -49,6 +50,7 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
         llm_provider=raw["llm"]["provider"],
         llm_model=raw["llm"]["model"],
         restaurants=[Restaurant(**r) for r in raw.get("restaurants", [])],
+        excludes=[str(e) for e in raw.get("exclude", [])],
     )
 
 
@@ -58,3 +60,13 @@ def find_restaurant(config: Config, location_title: str):
         if r.match.lower() in title:
             return r
     return None
+
+
+def is_excluded(config: Config, location: dict) -> bool:
+    """True si la ficha está en la lista de exclusión (por código de tienda
+    o por nombre) o si Google la marca como duplicada."""
+    if location.get("metadata", {}).get("duplicateLocation"):
+        return True
+    title = location.get("title", "").lower()
+    store_code = str(location.get("storeCode", ""))
+    return any(e.lower() in title or e == store_code for e in config.excludes)

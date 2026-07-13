@@ -27,13 +27,21 @@ llm:
   provider: gemini          # gemini (gratis) | anthropic
   model: gemini-2.5-flash   # para anthropic: claude-sonnet-5
 
+# Fichas EXCLUIDAS: el bot nunca las toca, aunque su nombre coincida con
+# un restaurante configurado. Se puede poner el código de tienda o un
+# trozo del nombre. (Además, cualquier ficha que Google marque como
+# duplicada se descarta automáticamente.)
+exclude:
+  - "04689908530062317521"   # Madre Santa Pizza — ficha DUPLICADA
+  - "05822270310761289432"   # Pecado 24H Delivery Service — ficha DUPLICADA
+  - "Central UNICUM"         # oficina central, no es un restaurante
+
 # Datos por restaurante. "match" debe coincidir (parcialmente, sin
 # mayúsculas) con el nombre de la ficha en Google Business Profile.
 # Las keywords son OPCIONALES y PROVISIONALES (revisar): el prompt indica
 # usar como mucho una o dos y solo si encajan de forma natural.
 #
-# NOTA: la ficha "Central UNICUM GROUP" (oficina) y las fichas duplicadas
-# quedan fuera a propósito. Las fichas cerradas permanentemente, también.
+# NOTA: las fichas cerradas permanentemente no están configuradas.
 restaurants:
 
   # ---------- SANTA PONSA ----------

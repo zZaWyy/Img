@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .config import STAR_VALUES, find_restaurant, load_config
+from .config import STAR_VALUES, find_restaurant, is_excluded, load_config
 from .gbp import GBPClient
 from .llm import generate_reply
 from .prompt import build_user_prompt
@@ -45,6 +45,9 @@ def run():
     for account in client.list_accounts():
         for location in client.list_locations(account["name"]):
             title = location.get("title", "")
+            if is_excluded(config, location):
+                print(f"– '{title}': ficha excluida/duplicada, se ignora.")
+                continue
             restaurant = find_restaurant(config, title)
             if restaurant is None:
                 print(f"– '{title}': no está en config.yaml, se ignora.")

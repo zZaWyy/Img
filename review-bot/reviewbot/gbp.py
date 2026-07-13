@@ -56,7 +56,7 @@ class GBPClient:
         """account_name: 'accounts/123'. Devuelve [{name, title}, ...]."""
         locations, page_token = [], None
         while True:
-            params = {"readMask": "name,title", "pageSize": 100}
+            params = {"readMask": "name,title,storeCode,metadata", "pageSize": 100}
             if page_token:
                 params["pageToken"] = page_token
             data = self._get(f"{LOCATIONS_API}/{account_name}/locations", params)
