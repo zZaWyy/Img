@@ -38,10 +38,8 @@ exclude:
 
 # Datos por restaurante. "match" debe coincidir (parcialmente, sin
 # mayúsculas) con el nombre de la ficha en Google Business Profile.
-# Las keywords son OPCIONALES y PROVISIONALES (revisar): el prompt indica
-# usar como mucho una o dos y solo si encajan de forma natural.
-#
-# NOTA: las fichas cerradas permanentemente no están configuradas.
+# Keywords: las oficiales del grupo. El bot usa COMO MUCHO 1-2 por
+# respuesta y solo cuando encajan de forma natural.
 restaurants:
 
   # ---------- SANTA PONSA ----------
@@ -49,102 +47,177 @@ restaurants:
   - match: "Mercader del Mar"
     city: "Santa Ponsa"
     keywords:
-      - "arroces y paellas"
-      - "pescado y marisco fresco"
-      - "terraza frente al mar en Santa Ponsa"
-    notes: "Reforzar producto de mercado, atardeceres y celebraciones."
+      - "restaurante mediterráneo"
+      - "paellas"
+      - "mariscos frescos"
+      - "pescados"
+      - "terraza con vistas al mar"
+      - "vinos y cava"
+      - "menú para niños"
+      - "ambiente familiar"
+      - "celebraciones y eventos"
+      - "abierto todo el año"
+    notes: ""
 
   - match: "Alma Beach"
     city: "Santa Ponsa"
     keywords:
-      - "steakhouse en Santa Ponsa"
-      - "cócteles junto a la playa"
-      - "pizza fina y crujiente"
+      - "steakhouse"
+      - "beach bar"
+      - "cócteles"
+      - "terraza al aire libre"
+      - "paellas"
+      - "pizzas artesanales"
+      - "cocina mediterránea"
+      - "abierto todo el año"
     notes: ""
 
   - match: "Amira Great Kebab"
     city: "Santa Ponsa"
     keywords:
-      - "kebab en Santa Ponsa"
+      - "kebab gourmet"
       - "dürum"
-    notes: ""
+      - "pizza"
+      - "wok oriental"
+      - "poké bowl"
+      - "helados y copas heladas"
+      - "take away"
+      - "reparto a domicilio en Calvià"
+      - "abierto 24 horas"
+      - "abierto todo el año"
+    notes: "Abierto 24 horas. Agradecer también los pedidos take away / a domicilio."
 
   - match: "Balcón de María"
     city: "Santa Ponsa"
     keywords:
-      - "pinchos y tapas en Santa Ponsa"
-      - "cócteles"
+      - "pinchos y tapas"
+      - "terraza con vistas al mar"
+      - "menú infantil"
+      - "parque infantil"
+      - "ambiente familiar"
+      - "cocina mediterránea"
+      - "cena romántica"
+      - "abierto todo el año"
     notes: ""
 
   - match: "Madre Santa Pizza"
     city: "Santa Ponsa"
     keywords:
-      - "pizza en Santa Ponsa"
+      - "restaurante italiano"
+      - "pizza napolitana"
       - "pasta fresca"
       - "tiramisú casero"
+      - "cócteles"
+      - "terraza con vistas al mar"
+      - "ambiente familiar"
+      - "cocina tradicional italiana"
+      - "abierto todo el año"
     notes: ""
 
   - match: "Mestiza"
     city: "Santa Ponsa"
     keywords:
-      - "hamburguesa gourmet en Santa Ponsa"
+      - "steak house"
       - "prime steak"
-      - "pizza americana"
-    notes: ""
-
-  - match: "Pecado 24H"
-    city: "Santa Ponsa"
-    keywords:
-      - "delivery 24 horas en Santa Ponsa"
-      - "take away"
-    notes: "Es delivery/take away: agradecer también los pedidos a domicilio."
-
-  - match: "Playas del Rey"
-    city: "Santa Ponsa"
-    keywords:
-      - "terraza en Santa Ponsa"
-      - "cocina mediterránea"
+      - "great burger"
+      - "pizza fina"
+      - "cócteles"
+      - "terraza al aire libre"
+      - "sports bar"
     notes: ""
 
   - match: "Virtus Smash Burger"
     city: "Santa Ponsa"
     keywords:
-      - "smash burger en Santa Ponsa"
-      - "cervezas"
-    notes: ""
+      - "smash burgers"
+      - "sports bar"
+      - "desayunos y bocadillos"
+      - "cócteles y cerveza"
+      - "terraza al aire libre"
+      - "comida rápida de calidad"
+      - "abierto 24 horas"
+      - "abierto todo el año"
+    notes: "Abierto 24 horas."
+
+  - match: "Pecado 24H"
+    city: "Santa Ponsa"
+    keywords:
+      - "delivery 24 horas"
+      - "take away"
+    notes: "PENDIENTE: keywords oficiales sin definir. Es delivery/take away: agradecer también los pedidos a domicilio."
+
+  - match: "Playas del Rey"
+    city: "Santa Ponsa"
+    keywords:
+      - "hotel en Santa Ponsa"
+      - "buena ubicación"
+      - "cerca de la playa"
+      - "hotel céntrico"
+      - "desayuno incluido"
+      - "piscina"
+    notes: >
+      Es un HOTEL, no un restaurante: responder como el equipo del hotel.
+      Su restaurante/bar es N76 (Sports Pool Bar: smash burger, thin pizza,
+      baguettes y sandwiches, cócteles y cerveza, ambiente relajado junto a
+      la piscina); si la reseña habla de la comida o del bar, se puede
+      mencionar N76 con naturalidad.
 
   # ---------- PALMA DE MALLORCA ----------
 
   - match: "Madre Café Bar"
     city: "Palma de Mallorca"
     keywords:
-      - "tapas y burger en Palma"
-      - "tardeo en Plaza Patines"
+      - "tapas"
+      - "pinchos"
+      - "arroces y paellas"
+      - "menú diario"
+      - "desayunos"
+      - "Plaza Patines"
+      - "parque infantil"
+      - "ambiente familiar"
+      - "abierto todo el año"
     notes: ""
 
   - match: "Madre Pizza"
     city: "Palma de Mallorca"
     keywords:
-      - "pizza artesana en Palma"
-      - "pasta fresca"
-      - "tiramisú casero"
+      - "restaurante italiano"
+      - "pizza napolitana"
+      - "pasta casera"
+      - "tiramisú"
+      - "cocina italiana tradicional"
+      - "Plaza Patines"
+      - "abierto todo el año"
     notes: ""
 
   # ---------- CERRADOS TEMPORALMENTE ----------
   # Descomentar (quitar los #) cuando reabran:
   #
-  # - match: "Padre Great Kebab"
-  #   city: "Palma de Mallorca"
-  #   keywords:
-  #     - "kebab en Plaza Patines"
-  #     - "sports bar en Palma"
-  #   notes: ""
-  #
   # - match: "Padre Smash Burger"
   #   city: "Palma de Mallorca"
   #   keywords:
-  #     - "smash burger en Palma"
-  #     - "bocatas y birras"
+  #     - "smash burger"
+  #     - "cervezas y cócteles"
+  #     - "pepitos"
+  #     - "delivery y take away"
+  #     - "Plaza Patines"
+  #     - "ambiente joven y moderno"
+  #     - "sports bar"
+  #     - "abierto todo el año"
+  #   notes: ""
+  #
+  # - match: "Padre Great Kebab"
+  #   city: "Palma de Mallorca"
+  #   keywords:
+  #     - "street food"
+  #     - "döner kebab"
+  #     - "dürum"
+  #     - "pizza fina y crujiente"
+  #     - "desayunos y bocatas"
+  #     - "sports bar"
+  #     - "delivery y take away"
+  #     - "Plaza Patines"
+  #     - "abierto todo el año"
   #   notes: ""
   #
   # - match: "Perseverantia"
