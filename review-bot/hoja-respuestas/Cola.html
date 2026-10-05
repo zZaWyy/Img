@@ -109,6 +109,7 @@
     google.script.run
       .withSuccessHandler(r => {
         clearTimeout(espera);
+        try { if (typeof r === 'string') r = JSON.parse(r); } catch (e) { r = null; }
         if (!r || !r.resenas) return fallo('La hoja no devolvió datos. Reintenta en un momento.');
         hecho = true;
         datos = r.resenas; pintarFiltro(); pintar();

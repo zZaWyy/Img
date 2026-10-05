@@ -1059,7 +1059,7 @@ function doGet() {
 function colaDatos() {
   const hoja = hoja_(HOJA.RESPUESTAS);
   const ultima = hoja.getLastRow();
-  if (ultima < 2) return { resenas: [], hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() };
+  if (ultima < 2) return JSON.stringify({ resenas: [], hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
   const filas = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
   const enlaces = hoja.getRange(2, COL.ENLACE, ultima - 1, 1).getRichTextValues();
   const resenas = filas
@@ -1081,7 +1081,8 @@ function colaDatos() {
       estado: f[COL.ESTADO - 1],
       aviso: f[COL.AVISO - 1],
     }));
-  return { resenas: resenas, hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() };
+  // Como texto JSON: si alguna celda es una fecha u otro tipo raro, google.script.run devolvería null.
+  return JSON.stringify({ resenas: resenas, hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
 }
 
 /** Acciones desde la cola: publicada, descartar, regenerar, reabrir. */
