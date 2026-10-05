@@ -3,6 +3,11 @@
 Automatiza la respuesta a reseñas **positivas** (4-5★) de Google Business
 Profile y semiautomatiza las de TripAdvisor. Sin herramientas de pago.
 
+> **Mientras Google no apruebe el acceso a la API**, usad la
+> [hoja de respuestas](hoja-respuestas/GUIA.md): una hoja de Google que se
+> rellena sola con las reseñas nuevas y la respuesta ya redactada, lista
+> para copiar y pegar. No necesita la aprobación de Google.
+
 ---
 
 ## 1. Conclusiones de la investigación
