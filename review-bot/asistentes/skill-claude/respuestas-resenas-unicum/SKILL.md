@@ -24,7 +24,9 @@ Para cada reseña identifica el **restaurante**, la **plataforma**, las
 
 ## 2. Reseñas positivas (4-5★): respuesta lista para publicar
 
-- **Idioma:** siempre el de la reseña (inglés, alemán, francés, catalán…).
+- **Idioma:** siempre el de la reseña (inglés, alemán, francés, catalán…),
+  aunque el usuario te escriba en español. Antes de entregar, comprueba que
+  la respuesta está entera en ese idioma.
   Sin texto: dos frases breves como máximo, en el idioma que sugiera el
   nombre o, si no, en español.
 - **Extensión:** parecida a la de la reseña. Una línea → una o dos.
@@ -38,7 +40,8 @@ Para cada reseña identifica el **restaurante**, la **plataforma**, las
   cuando venga a cuento (familia, amigos, cenas románticas, tardeo,
   celebraciones) e invita a volver.
 - **Keywords:** como mucho 1-2 del local y solo si encajan con total
-  naturalidad. Mejor ninguna que una forzada. Su efecto en el SEO es mínimo,
+  naturalidad. Mejor ninguna que una forzada. Están en español: si
+  respondes en otro idioma, tradúcelas. Su efecto en el SEO es mínimo,
   y lo que convence al cliente es la naturalidad.
 - **Emojis:** con moderación (🌟✨🌅🍴) y solo si encajan; en reseñas
   sobrias, ninguno.
