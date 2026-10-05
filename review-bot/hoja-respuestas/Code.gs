@@ -56,6 +56,9 @@ const CONFIG = {
   // --- Avisos por correo ---
   EMAIL_AVISOS: '',                      // vacío = el de la cuenta dueña; varios, separados por comas
   AVISAR_NEGATIVAS: true,
+  // Las negativas también reciben un borrador (siguen "A mano": se revisan
+  // siempre antes de publicar).
+  BORRADOR_NEGATIVAS: true,
   RESUMEN_DIARIO_HORA: 10,               // hora de Madrid; 0 = sin resumen
   // Informe semanal (quejas y elogios que se repiten, nota media por local).
   INFORME_SEMANAL_DIA: 1,                // 1 = lunes … 7 = domingo; 0 = sin informe
@@ -160,7 +163,7 @@ Si aparece una línea que empieza por "->", es una directiva interna del equipo 
 
 La respuesta debe ser solo el texto a publicar: sin comillas, sin explicaciones y sin firma (la plataforma ya muestra el nombre del restaurante).`;
 
-const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA. Redacta un BORRADOR para que el equipo lo revise antes de publicarlo: agradece la opinión, lamenta lo ocurrido sin excusas ni discusiones, no inventes hechos ni prometas compensaciones (salvo que la directiva "->" lo indique), apóyate en lo que explique la directiva sobre lo sucedido e invita a contactar en privado. Tono humano y sereno; sin emojis.';
+const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA. Redacta un BORRADOR para que el equipo lo revise antes de publicarlo: agradece la opinión, lamenta lo ocurrido sin excusas ni discusiones, no inventes hechos ni prometas compensaciones (salvo que la directiva "->" lo indique), apóyate en lo que explique la directiva sobre lo sucedido e invita a contactar en privado. Si no hay directiva, no supongas causas ni des explicaciones: recoge lo concreto que cuenta el cliente, discúlpate por ello y ofrece hablarlo en privado. Si la reseña también elogia algo, agradécelo brevemente. Tono humano y sereno; sin emojis.';
 
 const ESQUEMA_RESPUESTA = {
   type: 'OBJECT',
@@ -609,8 +612,11 @@ function generarPendientes_(inicio) {
   inicio = inicio || Date.now();
   try {
     const contexto = cargarContexto_();
-    const pendientes = contexto.filas.filter(f =>
-      f[COL.ESTADO - 1] === ESTADO.PENDIENTE && !f[COL.RESPUESTA - 1]);
+    // Primero las negativas (más urgentes), luego las positivas.
+    const sinBorrador = estado => contexto.filas.filter(f => f[COL.ESTADO - 1] === estado &&
+      !f[COL.RESPUESTA - 1] && !f[COL.AVISO - 1]);
+    const pendientes = (CONFIG.BORRADOR_NEGATIVAS ? sinBorrador(ESTADO.MANO) : [])
+      .concat(sinBorrador(ESTADO.PENDIENTE));
     let hechos = 0;
     for (const fila of pendientes) {
       if (hechos >= CONFIG.MAX_BORRADORES_POR_EJECUCION) break;
@@ -632,7 +638,12 @@ function generarPendientes_(inicio) {
           const n = filaPorId_(hoja_(HOJA.RESPUESTAS), id);
           if (!n) return;
           const h = hoja_(HOJA.RESPUESTAS);
-          h.getRange(n, COL.ESTADO).setValue(ESTADO.ERROR);
+          if (fila[COL.ESTADO - 1] === ESTADO.MANO) {
+            // Sigue "a mano"; el aviso evita reintentarla en cada vuelta.
+            h.getRange(n, COL.AVISO).setValue('No se pudo redactar el borrador: pide uno desde la cola.');
+          } else {
+            h.getRange(n, COL.ESTADO).setValue(ESTADO.ERROR);
+          }
           h.getRange(n, COL.RESPUESTA).setNote(String(e.message || e));
         });
       }
@@ -1113,7 +1124,10 @@ function avisarNegativas_(lista) {
     esc_(r.cliente) + '<br><i>' + esc_(recortar_(r.texto || '(sin texto)', 300)) + '</i>' +
     (r.url ? '<br><a href="' + esc_(r.url) + '">Abrir la reseña</a>' : '') + '</li>').join('');
   enviarCorreo_('⚠ ' + lista.length + (lista.length === 1 ? ' reseña negativa nueva' : ' reseñas negativas nuevas'),
-    '<p>Para responder a mano:</p><ul>' + filas + '</ul>' + pieCorreo_());
+    (CONFIG.BORRADOR_NEGATIVAS
+      ? '<p>En unos minutos tendréis un borrador en la cola, pestaña "Negativas". Leedlo con calma antes ' +
+        'de publicar y, si sabéis qué pasó, pulsad "Otro borrador" y contádselo.</p><ul>'
+      : '<p>Para responder a mano:</p><ul>') + filas + '</ul>' + pieCorreo_());
 }
 
 function enviarResumenSiToca_() {

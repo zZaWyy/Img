@@ -19,8 +19,10 @@ estilo de la casa. Publicas desde el móvil con dos toques.
   local.
 - **Detecta problemas escondidos:** si una reseña de 5★ dice *"todo genial
   pero el café llegó frío"*, la marca **Revisar ⚠** con el motivo.
-- **Negativas (1-3★):** sin borrador y con **aviso por correo al momento**.
-  Si quieres, le cuentas qué pasó y te propone un borrador para revisar.
+- **Negativas (1-3★):** **aviso por correo al momento** y un borrador
+  prudente (se disculpa, no inventa causas, invita a hablar en privado).
+  Siempre se revisan antes de publicar; si le cuentas qué pasó, te propone
+  otro mejor.
 - **Cola en el móvil:** una página donde, con **"Copiar y abrir"**, copias
   la respuesta y abres la reseña para pegarla.
 - **Resumen diario** por correo a las 10:00 con lo pendiente por local.
@@ -127,8 +129,8 @@ Gem de Gemini y Skill de Claude: ver la sección "Asistentes" más abajo.
   *"menciona la terraza"*).
 - **Revisar ⚠:** positivas que mencionan algo a mirar. El aviso explica
   qué.
-- **Negativas:** **✍ Redactar borrador** → cuéntale qué pasó → revisa y
-  publica tú.
+- **Negativas:** lee el borrador con calma. Si sabes qué pasó, **✍ Otro
+  borrador** → cuéntaselo → revisa y publica tú.
 
 **Desde la hoja:** misma información en columnas. Para regenerar, escribe
 en *Instrucción (->)*, selecciona la fila y pulsa **Reseñas → ↻ Regenerar**.
