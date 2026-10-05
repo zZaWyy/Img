@@ -17,8 +17,8 @@
  * Publicar sigue siendo manual, idealmente desde la cola del móvil
  * (archivo Cola.html, se publica como aplicación web). Ver GUIA.md.
  *
- * Claves (Configuración del proyecto → Propiedades de la secuencia de
- * comandos): APIFY_TOKEN y GEMINI_API_KEY.
+ * Claves: las pide y comprueba "Reseñas → Instalar" (APIFY_TOKEN y
+ * GEMINI_API_KEY) y se guardan en las propiedades del proyecto.
  */
 
 const CONFIG = {
@@ -95,33 +95,34 @@ const ORIGEN = { HISTORICO: 'Respuesta anterior', CORREGIDA: 'Corregida por el e
 const MAX_HISTORICOS_POR_LOCAL = 25;
 
 // Enlaces de Google Maps construidos con el identificador de ficha (cid)
-// de los correos de aviso de Google. Los de TripAdvisor se pegan a mano.
+// de los correos de aviso de Google; los de TripAdvisor, localizados en
+// TripAdvisor (octubre de 2026). Comprobad que cada uno abre el local.
 const RESTAURANTES_INICIALES = [
-  ['Sí', 'Mercader del Mar', 'Santa Ponsa', 'https://maps.google.com/?cid=14530670311499082814', '',
+  ['Sí', 'Mercader del Mar', 'Santa Ponsa', 'https://maps.google.com/?cid=14530670311499082814', 'https://www.tripadvisor.com/Restaurant_Review-g562815-d23043884-Reviews-Mercader_Del_Mar-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'restaurante mediterráneo, paellas, mariscos frescos, pescados, terraza con vistas al mar, vinos y cava, menú para niños, ambiente familiar, celebraciones y eventos, abierto todo el año', ''],
-  ['Sí', 'Alma Beach', 'Santa Ponsa', 'https://maps.google.com/?cid=12253750210614447929', '',
+  ['Sí', 'Alma Beach', 'Santa Ponsa', 'https://maps.google.com/?cid=12253750210614447929', 'https://www.tripadvisor.com/Restaurant_Review-g562815-d6761224-Reviews-Alma_Beach_Cocktail_Bar_Steak_House_Thin_Crispy_Pizza-Santa_Ponsa_Calvia_Majorca_.html',
     'steakhouse, beach bar, cócteles, terraza al aire libre, paellas, pizzas artesanales, cocina mediterránea, abierto todo el año', ''],
-  ['Sí', 'Amira Great Kebab', 'Santa Ponsa', 'https://maps.google.com/?cid=5849406189229568440', '',
+  ['Sí', 'Amira Great Kebab', 'Santa Ponsa', 'https://maps.google.com/?cid=5849406189229568440', 'https://www.tripadvisor.com/Restaurant_Review-g562815-d32867042-Reviews-Amira_Great_Kebab_Durum_Pizza-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'kebab gourmet, dürum, pizza, wok oriental, poké bowl, helados y copas heladas, take away, reparto a domicilio en Calvià, abierto 24 horas, abierto todo el año',
     'Abierto 24 horas. Agradecer también los pedidos take away / a domicilio.'],
-  ['Sí', 'Balcón de María', 'Santa Ponsa', 'https://maps.google.com/?cid=4685547750116726756', '',
+  ['Sí', 'Balcón de María', 'Santa Ponsa', 'https://maps.google.com/?cid=4685547750116726756', 'https://www.tripadvisor.com/Restaurant_Review-g562815-d1792294-Reviews-Balcon_de_Maria-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'pinchos y tapas, terraza con vistas al mar, menú infantil, parque infantil, ambiente familiar, cocina mediterránea, cena romántica, abierto todo el año', ''],
-  ['Sí', 'Madre Santa Pizza', 'Santa Ponsa', 'https://maps.google.com/?cid=8957138940596620405', '',
+  ['Sí', 'Madre Santa Pizza', 'Santa Ponsa', 'https://maps.google.com/?cid=8957138940596620405', 'https://www.tripadvisor.com/Restaurant_Review-g562815-d26835950-Reviews-Madre_Santa_Pizza_Pasta_Tiramisu-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'restaurante italiano, pizza napolitana, pasta fresca, tiramisú casero, cócteles, terraza con vistas al mar, ambiente familiar, cocina tradicional italiana, abierto todo el año', ''],
-  ['Sí', 'Mestiza', 'Santa Ponsa', 'https://maps.google.com/?cid=11933573054473555408', '',
+  ['Sí', 'Mestiza', 'Santa Ponsa', 'https://maps.google.com/?cid=11933573054473555408', 'https://www.tripadvisor.es/Restaurant_Review-g562815-d33087927-Reviews-Mestiza_Great_Burger_Prime_Steak_Thin_Crispy_American_Pizza-Santa_Ponsa_Calvia_M.html',
     'steak house, prime steak, great burger, pizza fina, cócteles, terraza al aire libre, sports bar', ''],
-  ['Sí', 'Virtus Smash Burger', 'Santa Ponsa', 'https://maps.google.com/?cid=8982377804222892924', '',
+  ['Sí', 'Virtus Smash Burger', 'Santa Ponsa', 'https://maps.google.com/?cid=8982377804222892924', 'https://www.tripadvisor.com/Restaurant_Review-g562815-d32713291-Reviews-Virtus_Smash_Burger_Beer-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'smash burgers, sports bar, desayunos y bocadillos, cócteles y cerveza, terraza al aire libre, comida rápida de calidad, abierto 24 horas, abierto todo el año',
     'Abierto 24 horas.'],
-  ['Sí', 'Pecado 24H', 'Santa Ponsa', 'https://maps.google.com/?cid=18063739213391216462', '',
+  ['Sí', 'Pecado 24H', 'Santa Ponsa', 'https://maps.google.com/?cid=18063739213391216462', 'https://www.tripadvisor.com/Restaurant_Review-g562815-d33026069-Reviews-Pecado_24h_Delivery_Street_Food-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'delivery 24 horas, take away',
     'Es delivery/take away: agradecer también los pedidos a domicilio.'],
-  ['Sí', 'Playas del Rey', 'Santa Ponsa', 'https://maps.google.com/?cid=2155032086752323594', '',
+  ['Sí', 'Playas del Rey', 'Santa Ponsa', 'https://maps.google.com/?cid=2155032086752323594', 'https://www.tripadvisor.com/Hotel_Review-g562815-d272932-Reviews-Playas_del_Rey_Hotel-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'hotel en Santa Ponsa, buena ubicación, cerca de la playa, hotel céntrico, desayuno incluido, piscina',
     'Es un HOTEL, no un restaurante: responder como el equipo del hotel. Su bar es N76 (Sports Pool Bar: smash burger, thin pizza, baguettes y sandwiches, cócteles y cerveza, ambiente relajado junto a la piscina); si la reseña habla de la comida o del bar, se puede mencionar N76 con naturalidad.'],
-  ['Sí', 'Madre Café Bar', 'Palma de Mallorca', 'https://maps.google.com/?cid=975611850967119471', '',
+  ['Sí', 'Madre Café Bar', 'Palma de Mallorca', 'https://maps.google.com/?cid=975611850967119471', 'https://www.tripadvisor.com/Restaurant_Review-g187463-d26725569-Reviews-Madre_Cafe_Bar_Tapas_Burger-Palma_de_Mallorca_Majorca_Balearic_Islands.html',
     'tapas, pinchos, arroces y paellas, menú diario, desayunos, Plaza Patines, parque infantil, ambiente familiar, abierto todo el año', ''],
-  ['Sí', 'Madre Pizza', 'Palma de Mallorca', 'https://maps.google.com/?cid=4547889845256865308', '',
+  ['Sí', 'Madre Pizza', 'Palma de Mallorca', 'https://maps.google.com/?cid=4547889845256865308', 'https://www.tripadvisor.com/Restaurant_Review-g187463-d32713256-Reviews-Madre_Pizza_Pasta_Tiramisu-Palma_de_Mallorca_Majorca_Balearic_Islands.html',
     'restaurante italiano, pizza napolitana, pasta casera, tiramisú, cocina italiana tradicional, Plaza Patines, abierto todo el año', ''],
 ];
 
@@ -253,19 +254,14 @@ function onOpen() {
     .addSeparator()
     .addItem('🎓 Aprender de respuestas antiguas', 'pedirEjemplos')
     .addItem('💶 Ver gasto de Apify', 'mostrarGastoApify')
+    .addItem('🔑 Cambiar claves', 'cambiarClaves')
     .addItem('⚙ Instalar / reparar', 'instalar')
     .addToUi();
 }
 
 function instalar() {
   const ui = SpreadsheetApp.getUi();
-  const faltan = ['APIFY_TOKEN', 'GEMINI_API_KEY'].filter(k => !prop_(k, false));
-  if (faltan.length) {
-    ui.alert('Faltan claves: ' + faltan.join(', ') + '.\n\n' +
-      'Añádelas en Extensiones → Apps Script → ⚙ Configuración del proyecto → ' +
-      'Propiedades de la secuencia de comandos, y vuelve a pulsar "Instalar".');
-    return;
-  }
+  if (!pedirClaves_(false)) return;
   prepararHojaRespuestas_();
   prepararHojaRestaurantes_();
   const primeraVez = prepararHojaEjemplos_();
@@ -282,6 +278,56 @@ function instalar() {
     'Ahora pulsa Reseñas → "Buscar reseñas nuevas ahora". La primera lectura ' +
     'tarda unos minutos y además aprende de vuestras respuestas antiguas: ' +
     'vuelve a pulsarlo pasados 5-10 minutos (o espera a la siguiente media hora).');
+}
+
+function cambiarClaves() {
+  if (pedirClaves_(true)) SpreadsheetApp.getUi().alert('Claves guardadas y comprobadas ✔');
+}
+
+const CLAVES = [
+  { nombre: 'APIFY_TOKEN', texto: 'Pega tu token de Apify (console.apify.com → Settings → API & Integrations → Personal API token):', probar: probarApify_ },
+  { nombre: 'GEMINI_API_KEY', texto: 'Pega tu clave de Gemini (aistudio.google.com → Get API key):', probar: probarGemini_ },
+];
+
+/**
+ * Pide por pantalla las claves que falten (o todas, si "todas"), comprueba
+ * que funcionan y las guarda en las propiedades del proyecto, que solo
+ * puede leer este programa. Devuelve false si se cancela.
+ */
+function pedirClaves_(todas) {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  for (const c of CLAVES) {
+    if (!todas && props.getProperty(c.nombre)) continue;
+    for (;;) {
+      const r = ui.prompt('Clave ' + c.nombre, c.texto + (todas ? '\n(Vacío = mantener la actual)' : ''),
+        ui.ButtonSet.OK_CANCEL);
+      if (r.getSelectedButton() !== ui.Button.OK) {
+        ui.alert('Instalación pausada: sin esa clave el sistema no puede funcionar. Vuelve a pulsar "Instalar" cuando la tengas.');
+        return false;
+      }
+      const valor = r.getResponseText().trim();
+      if (!valor && todas && props.getProperty(c.nombre)) break;
+      const error = valor ? c.probar(valor) : 'está vacía';
+      if (!error) { props.setProperty(c.nombre, valor); break; }
+      ui.alert('Esa clave no funciona (' + error + '). Revisa que la copiaste entera y vuelve a pegarla.');
+    }
+  }
+  return true;
+}
+
+/** Devuelve '' si el token de Apify funciona, o el motivo del fallo. */
+function probarApify_(token) {
+  const res = UrlFetchApp.fetch('https://api.apify.com/v2/users/me', {
+    headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+  return res.getResponseCode() === 200 ? '' : 'Apify respondió ' + res.getResponseCode();
+}
+
+/** Devuelve '' si la clave de Gemini funciona, o el motivo del fallo. */
+function probarGemini_(clave) {
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
+    headers: { 'x-goog-api-key': clave }, muteHttpExceptions: true });
+  return res.getResponseCode() === 200 ? '' : 'Gemini respondió ' + res.getResponseCode();
 }
 
 function pedirEjemplos() {

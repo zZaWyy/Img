@@ -28,50 +28,33 @@ Coste: **0 €** dentro de los planes gratuitos (ver "Costes").
 
 ---
 
-## Instalación (unos 20 minutos)
+## Instalación (unos 10 minutos)
 
-Necesitas la cuenta `simsalabimgrupo@gmail.com`, tu clave de Gemini y una
-cuenta gratuita de Apify (paso 4).
+Lo que ya está hecho: el programa, la configuración de los 11 locales y sus
+enlaces de Google Maps y TripAdvisor. Lo que queda son pasos que exigen
+**tu cuenta y tu permiso**, y por eso solo los puedes hacer tú.
 
-### Paso 1: Crear la hoja
+Necesitas la cuenta `simsalabimgrupo@gmail.com` y tu clave de Gemini.
 
-[drive.google.com](https://drive.google.com) con `simsalabimgrupo@gmail.com`
-→ **Nuevo → Hojas de cálculo de Google** → nombre: `Respuestas reseñas
-Unicum`.
+### Paso 1: Crear la hoja y pegar el programa
 
-### Paso 2: Pegar el programa
+1. [drive.google.com](https://drive.google.com) con `simsalabimgrupo@gmail.com`
+   → **Nuevo → Hojas de cálculo de Google** → nombre: `Respuestas reseñas
+   Unicum`.
+2. En la hoja: **Extensiones → Apps Script**.
+3. Borra todo el texto de `Código.gs` y pega el contenido completo de
+   **`Code.gs`**.
+4. Junto a "Archivos", pulsa **＋ → HTML** → nombre **`Cola`** → borra lo
+   que trae y pega el contenido completo de **`Cola.html`**.
+5. Guarda 💾.
 
-1. En la hoja: **Extensiones → Apps Script**.
-2. Borra todo el texto del archivo `Código.gs` y pega el contenido completo
-   de **`Code.gs`**.
-3. Arriba, cambia "Proyecto sin título" por `Reseñas Unicum`.
-
-### Paso 3: Añadir la cola del móvil
-
-1. En el mismo editor, junto a "Archivos", pulsa **＋ → HTML**.
-2. Nombre: **`Cola`**, exactamente así (el editor añade `.html` solo).
-3. Borra lo que trae y pega el contenido completo de **`Cola.html`**.
-4. Guarda 💾.
-
-### Paso 4: Clave de Apify (gratis)
+### Paso 2: Crear la cuenta de Apify (gratis)
 
 [apify.com](https://apify.com) → **Sign up** con Google (plan Free, sin
 tarjeta) → **Settings → API & Integrations** → copia el **Personal API
 token**.
 
-### Paso 5: Guardar las dos claves
-
-En el editor: rueda **⚙ Configuración del proyecto** → **Propiedades de la
-secuencia de comandos → Añadir propiedad**:
-
-| Propiedad | Valor |
-|---|---|
-| `APIFY_TOKEN` | el token de Apify |
-| `GEMINI_API_KEY` | tu clave de Gemini |
-
-→ **Guardar propiedades de la secuencia de comandos**.
-
-### Paso 6: Instalar
+### Paso 3: Instalar
 
 1. Vuelve a la **hoja** y recárgala (F5). Aparece el menú **Reseñas**.
 2. **Reseñas → ⚙ Instalar / reparar**.
@@ -79,29 +62,25 @@ secuencia de comandos → Añadir propiedad**:
    conectarse a Apify y Gemini y enviaros correos.
    - Si sale *"Google no ha verificado esta aplicación"* → **Configuración
      avanzada → Ir a Reseñas Unicum (no seguro) → Permitir**.
-4. Si no apareció "Listo", pulsa otra vez **Instalar / reparar**.
+4. Te pedirá **el token de Apify** y **la clave de Gemini**: pégalos. El
+   programa comprueba que funcionan antes de guardarlos.
+5. Si no apareció "Listo", pulsa otra vez **Instalar / reparar**.
 
-### Paso 7: Revisar los restaurantes y añadir TripAdvisor
+### Paso 4: Comprobar los locales
 
-Pestaña **Restaurantes**:
+Pestaña **Restaurantes**: haz clic en un par de enlaces de Google Maps y de
+TripAdvisor y comprueba que abren el local correcto. Si alguno falla, pega
+la dirección buena. Aquí se cambian también **keywords y notas**, o se
+desactiva un local (Activo = No).
 
-1. **Haz clic en cada enlace de Google Maps** y comprueba que abre el local
-   correcto. Si alguno falla, busca el local en Google Maps y pega la
-   dirección del navegador.
-2. **Columna "Enlace TripAdvisor":** busca cada local en TripAdvisor y pega
-   la dirección de su página (la que contiene `Restaurant_Review-g…-d…`).
-   Los que dejes vacíos no se leen en TripAdvisor.
-3. Aquí se cambian también **keywords y notas**, o se desactiva un local
-   (Activo = No), sin tocar el programa.
-
-### Paso 8: Primera lectura
+### Paso 5: Primera lectura
 
 **Reseñas → ▶ Buscar reseñas nuevas ahora.** La primera vez lee además
 vuestras respuestas antiguas para aprender el estilo. Vuelve a pulsarlo
 pasados **5-10 minutos**: aparecerán las reseñas de los últimos 7 días y la
 pestaña **Ejemplos** se llenará con vuestras respuestas reales.
 
-### Paso 9: Publicar la cola en el móvil
+### Paso 6: Publicar la cola en el móvil
 
 1. En el editor de Apps Script: **Implementar → Nueva implementación**.
 2. Rueda ⚙ junto a "Seleccionar tipo" → **Aplicación web**.
@@ -118,9 +97,13 @@ y en los correos.
 > cuentas de Google iniciadas en el mismo navegador. Ábrela en una ventana
 > de incógnito con solo `simsalabimgrupo` iniciada.
 >
-> **Para que la use más gente del equipo:** en el paso 3, elige "Cualquier
+> **Para que la use más gente del equipo:** en el punto 3, elige "Cualquier
 > persona con cuenta de Google". Quien tenga el enlace podrá usarla, así que
 > no lo compartáis fuera del equipo.
+
+### Paso 7 (opcional): Asistentes
+
+Gem de Gemini y Skill de Claude: ver la sección "Asistentes" más abajo.
 
 ---
 
@@ -215,12 +198,14 @@ Al principio de `Code.gs`, bloque `CONFIG`. Tras cambiar algo, guarda 💾:
 ## Si ya instalaste la versión 1
 
 1. En Apps Script, sustituye el contenido de `Código.gs` por el nuevo
-   `Code.gs`.
-2. Añade el archivo HTML `Cola` (paso 3).
-3. Pulsa **Reseñas → ⚙ Instalar / reparar**. Tu hoja antigua se guarda
+   `Code.gs` y añade el archivo HTML `Cola` (paso 1).
+2. Pulsa **Reseñas → ⚙ Instalar / reparar**. Tu hoja antigua se guarda
    como "Respuestas (v1)", se crea la nueva y a *Restaurantes* se le añade
    la columna de TripAdvisor sin perder vuestros cambios.
-4. Sigue con los pasos 7 a 9.
+3. Como tu pestaña *Restaurantes* se conserva, pega en la nueva columna los
+   enlaces de TripAdvisor. Están en la lista `RESTAURANTES_INICIALES` del
+   principio de `Code.gs`.
+4. Sigue con los pasos 5 y 6.
 
 ## Limitaciones
 
