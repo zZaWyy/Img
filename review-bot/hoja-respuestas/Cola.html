@@ -94,9 +94,26 @@
 
   function cargar() {
     $('lista').replaceChildren(el('p', 'vacio-lista', 'Cargando…'));
+    let hecho = false;
+    const fallo = texto => {
+      if (hecho) return;
+      hecho = true;
+      const b = el('button', 'b prim', '↻ Reintentar');
+      b.addEventListener('click', cargar);
+      $('lista').replaceChildren(el('p', 'vacio-lista', texto), b);
+    };
+    // Con varias cuentas de Google abiertas, la llamada se pierde sin dar error.
+    const espera = setTimeout(() => fallo('No termina de cargar. Suele pasar al tener varias cuentas de ' +
+      'Google abiertas en el navegador: abre este enlace en una ventana de incógnito e inicia sesión ' +
+      'solo con la cuenta que tenga acceso.'), 20000);
     google.script.run
-      .withSuccessHandler(r => { datos = r.resenas; pintarFiltro(); pintar(); })
-      .withFailureHandler(e => $('lista').replaceChildren(el('p', 'vacio-lista', 'Error: ' + e.message)))
+      .withSuccessHandler(r => {
+        clearTimeout(espera);
+        if (!r || !r.resenas) return fallo('La hoja no devolvió datos. Reintenta en un momento.');
+        hecho = true;
+        datos = r.resenas; pintarFiltro(); pintar();
+      })
+      .withFailureHandler(e => { clearTimeout(espera); fallo('Error: ' + e.message); })
       .colaDatos();
   }
 
