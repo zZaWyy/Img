@@ -9,7 +9,9 @@ estilo de la casa. Publicas desde el móvil con dos toques.
 - **Lee las reseñas nuevas** de Google Maps cada hora y las de TripAdvisor
   cada 12 h. Un repaso diario recoge las que Google publica con retraso.
 - **Redacta un borrador** para las de 4-5★, en el idioma del cliente, y
-  **traduce** al español las reseñas en otros idiomas.
+  **traduce** al español las reseñas en otros idiomas. Comprueba el idioma
+  de cada borrador: si sale en otro, lo repite, y si aun así falla, lo
+  marca **Revisar ⚠**.
 - **Aprende de vosotros:** lee vuestras respuestas antiguas y, cada vez que
   corregís un borrador antes de publicarlo, guarda la versión final como
   ejemplo. Cuanto más lo uséis, más suena a vosotros.
@@ -285,8 +287,9 @@ Cuando haya una versión nueva de `Code.gs` (o de `Cola.html`):
 3. Recarga la hoja (F5) para ver el menú nuevo.
 
 **Al pasar a la versión 3** no hace falta nada más. En la siguiente vuelta,
-el sistema rescata solo las reseñas del último mes sin responder y descarta
-los ejemplos respondidos en otro idioma.
+el sistema rescata solo las reseñas del último mes sin responder, descarta
+los ejemplos respondidos en otro idioma y vuelve a redactar los borradores
+pendientes que salieron en un idioma distinto al de la reseña.
 
 ## Si ya instalaste la versión 1
 

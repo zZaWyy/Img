@@ -391,10 +391,31 @@ function geminiPago_() {
 function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
-  if (props.getProperty('VERSION') === '3') return;
-  pedirRecuperacion_();          // rescata las reseñas sin responder del último mes
+  const version = props.getProperty('VERSION');
+  if (version === '3.1') return;
+  if (version !== '3') {
+    pedirRecuperacion_();        // rescata las reseñas sin responder del último mes
+  }
   desactivarEjemplosMalos_();    // ejemplos respondidos en otro idioma
-  props.setProperty('VERSION', '3');
+  rehacerBorradoresEnOtroIdioma_();
+  props.setProperty('VERSION', '3.1');
+}
+
+/** Vacía los borradores pendientes que están en otro idioma que la reseña para que se redacten de nuevo. */
+function rehacerBorradoresEnOtroIdioma_() {
+  conBloqueo_(() => {
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    if (hoja.getLastRow() < 2) return;
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues().forEach((f, i) => {
+      const estado = f[COL.ESTADO - 1];
+      if ((estado !== ESTADO.PENDIENTE && estado !== ESTADO.REVISAR) || f[COL.INSTRUCCION - 1]) return;
+      if (String(f[COL.RESENA - 1] || '').trim().length < 20) return;
+      if (!f[COL.RESPUESTA - 1] || !idiomaDistinto_(f[COL.IDIOMA - 1], f[COL.RESPUESTA - 1])) return;
+      hoja.getRange(i + 2, COL.RESPUESTA).setValue('');
+      hoja.getRange(i + 2, COL.ESTADO, 1, 2).setValues([[ESTADO.PENDIENTE, '']]); // estado y aviso
+      hoja.getRange(i + 2, COL.MODELO).setValue('');
+    });
+  });
 }
 
 function mostrarGastoApify() {
@@ -723,7 +744,10 @@ function redactar_(fila, contexto, instruccion, manual) {
   const p = [];
   p.push('Plataforma: ' + fila[COL.PLATAFORMA - 1]);
   p.push('Restaurante: ' + rest.nombre + (rest.ciudad ? ' (' + rest.ciudad + ')' : ''));
-  if (rest.keywords) p.push('Keywords disponibles (usar 1-2 como máximo y solo si encajan): ' + rest.keywords);
+  if (rest.keywords) {
+    p.push('Keywords disponibles (usar 1-2 como máximo y solo si encajan; están en español: si respondes en ' +
+      'otro idioma, tradúcelas): ' + rest.keywords);
+  }
   if (rest.notas) p.push('Notas del equipo: ' + rest.notas);
 
   const ejemplos = elegirEjemplos_(contexto.ejemplos, rest.nombre, idioma);
@@ -747,13 +771,46 @@ function redactar_(fila, contexto, instruccion, manual) {
   p.push('Cliente: ' + fila[COL.CLIENTE - 1]);
   p.push('Puntuación: ' + estrellas + ' estrellas');
   p.push(texto ? 'Reseña:\n' + texto : 'Reseña: (sin texto, solo puntuación)');
+  const lengua = texto && idioma ? nombreIdioma_(idioma) : '';
+  if (lengua) {
+    p.push('\nIdioma de la reseña: ' + lengua + '. Escribe la respuesta en ' + lengua +
+      ', aunque estas indicaciones y los ejemplos estén en español.');
+  }
   if (estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR) p.push('\n' + INSTRUCCION_NEGATIVA);
   if (instruccion) p.push('-> ' + instruccion.replace(/^->\s*/, ''));
   if (pedirTraduccion) p.push('\nIncluye en "traduccion" la traducción de la reseña al español.');
 
   const largo = texto.length >= CONFIG.LONGITUD_RESENA_CORTA;
   const mejor = manual || largo || geminiPago_();
-  return llamarIA_(contexto.prompt, p.join('\n'), mejor ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
+  const salida = llamarIA_(contexto.prompt, p.join('\n'), mejor ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
+
+  // Comprobación de idioma (salvo que el equipo haya dado una indicación propia).
+  const comprobar = lengua && !instruccion && texto.length >= 20;
+  if (!comprobar || !idiomaDistinto_(idioma, salida.respuesta)) return salida;
+  try {
+    const otra = llamarIA_(contexto.prompt, p.join('\n') + '\n-> IMPORTANTE: tu respuesta anterior no estaba en ' +
+      lengua + '. Escríbela entera en ' + lengua + '.', 0);
+    if (!idiomaDistinto_(idioma, otra.respuesta)) return otra;
+  } catch (e) {
+    if (e.tipo === 'clave') throw e;
+  }
+  salida.aviso = (salida.aviso ? salida.aviso + ' ' : '') + 'La respuesta no parece estar en ' + lengua +
+    ': revísala o pide otra versión.';
+  return salida;
+}
+
+const NOMBRES_IDIOMA = {
+  es: 'español', en: 'inglés', de: 'alemán', fr: 'francés', it: 'italiano', pt: 'portugués',
+  nl: 'neerlandés', ca: 'catalán', sv: 'sueco', no: 'noruego', nb: 'noruego', da: 'danés',
+  fi: 'finés', pl: 'polaco', ru: 'ruso', uk: 'ucraniano', cs: 'checo', sk: 'eslovaco', hu: 'húngaro',
+  ro: 'rumano', el: 'griego', tr: 'turco', ga: 'irlandés', is: 'islandés', lt: 'lituano',
+  lv: 'letón', et: 'estonio', sl: 'esloveno', hr: 'croata', bg: 'búlgaro', sr: 'serbio',
+  ja: 'japonés', zh: 'chino', ko: 'coreano', ar: 'árabe', he: 'hebreo', eu: 'euskera', gl: 'gallego',
+};
+
+function nombreIdioma_(codigo) {
+  const c = String(codigo || '').toLowerCase();
+  return NOMBRES_IDIOMA[c.slice(0, 2)] || 'el mismo idioma de la reseña (' + c + ')';
 }
 
 /**
@@ -772,8 +829,10 @@ function llamarIA_(sistema, usuario, desde, esquema) {
     } catch (e) {
       const motivo = e.tipo === 'cuota' ? modelo + ' sin cupo ' + (e.diaria ? 'para hoy' : 'por unos minutos')
         : String(e.message || e).slice(0, 200);
-      PropertiesService.getScriptProperties().setProperty('ULTIMO_ERROR_IA',
-        Utilities.formatDate(new Date(), ZONA, 'dd/MM HH:mm') + ' · ' + motivo);
+      PropertiesService.getScriptProperties().setProperties({
+        ULTIMO_ERROR_IA: Utilities.formatDate(new Date(), ZONA, 'dd/MM HH:mm') + ' · ' + motivo,
+        ULTIMO_ERROR_IA_MS: String(Date.now()),
+      });
       if (e.tipo === 'cuota') { pausarModelo_(modelo, e.diaria ? 3 * HORA : 2 * MIN); continue; }
       if (e.tipo === 'temporal') { pausarModelo_(modelo, 5 * MIN); continue; }
       if (e.tipo === 'vacio') continue; // respuesta vacía o mal formada: probar el siguiente
@@ -798,7 +857,9 @@ function llamarModelo_(modelo, sistema, usuario, esquema) {
   const cuerpo = {
     contents: [{ role: 'user', parts: [{ text: json ? usuario : sistema + '\n\n---\n\n' + usuario +
       '\n\nDevuelve solo el texto de la respuesta.' }] }],
-    generationConfig: esquema ? { temperature: 0.3, maxOutputTokens: 8192 } : { temperature: 0.9, maxOutputTokens: 2048 },
+    // Sin temperatura: Gemini 3 recomienda la de serie (con menos puede entrar en bucle). Margen
+    // amplio de tokens porque el "razonamiento" del modelo también cuenta.
+    generationConfig: { maxOutputTokens: 8192 },
   };
   if (json) {
     cuerpo.systemInstruction = { parts: [{ text: sistema }] };
@@ -950,7 +1011,7 @@ const PALABRAS_IDIOMA = {
 
 /** Idioma más probable de un texto (solo los de PALABRAS_IDIOMA), o '' si no está claro. */
 function idiomaProbable_(texto) {
-  const palabras = String(texto || '').toLowerCase().split(/[^a-zà-ÿßñç]+/);
+  const palabras = String(texto || '').toLowerCase().split(/[^\p{L}]+/u);
   const cuenta = {};
   Object.keys(PALABRAS_IDIOMA).forEach(l => {
     const set = PALABRAS_IDIOMA[l];
@@ -961,12 +1022,17 @@ function idiomaProbable_(texto) {
   return a >= 3 && a >= 1.5 * b ? orden[0] : '';
 }
 
-/** true si la respuesta está claramente en otro idioma que la reseña. */
+/**
+ * true si la respuesta está claramente en otro idioma que la reseña. Para
+ * idiomas que no sabemos reconocer (polaco, sueco…) solo detecta las
+ * respuestas en español.
+ */
 function idiomaDistinto_(idiomaResena, respuesta) {
   const l = String(idiomaResena || '').toLowerCase().slice(0, 2);
-  if (!PALABRAS_IDIOMA[l]) return false; // idioma que no sabemos comprobar
+  if (!l) return false;
   const r = idiomaProbable_(respuesta);
-  return Boolean(r) && r !== l;
+  if (!r) return false;
+  return PALABRAS_IDIOMA[l] ? r !== l : r === 'es';
 }
 
 
@@ -1077,9 +1143,12 @@ function enviarResumenSiToca_() {
   if (!total) return;
   const filas = Object.keys(cuenta).sort().map(r => '<tr><td>' + esc_(r) + '</td><td>' + cuenta[r].listas +
     '</td><td>' + cuenta[r].revisar + '</td><td>' + cuenta[r].mano + '</td></tr>').join('');
+  const fallo = Date.now() - Number(props.getProperty('ULTIMO_ERROR_IA_MS') || 0) < DIA
+    ? '<p style="color:#888">Último fallo de la IA (se resolvió con otro modelo o al reintentar): ' +
+      esc_(props.getProperty('ULTIMO_ERROR_IA')) + '</p>' : '';
   enviarCorreo_(total + ' reseñas esperando respuesta',
     '<table cellpadding="6" style="border-collapse:collapse"><tr><th align="left">Local</th>' +
-    '<th>Listas</th><th>Revisar ⚠</th><th>Negativas</th></tr>' + filas + '</table>' + pieCorreo_());
+    '<th>Listas</th><th>Revisar ⚠</th><th>Negativas</th></tr>' + filas + '</table>' + fallo + pieCorreo_());
 }
 
 // ------------------------------------------------------------ informe semanal
