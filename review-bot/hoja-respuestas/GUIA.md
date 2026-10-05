@@ -28,6 +28,9 @@ estilo de la casa. Publicas desde el móvil con dos toques.
 - **Enlace directo para responder:** en Google abre la reseña en el panel
   del negocio, con el botón *Responder* (hay que tener iniciada la cuenta
   que gestiona las fichas).
+- **Publicadas:** pestaña *Publicadas ✔* en la cola (últimos 60 días) y
+  pestaña *Publicadas* en la hoja, que se rellena sola. Si una se marcó por
+  error, **↩ Devolver a pendientes**.
 - **Cola en el móvil:** una página donde, con **"Copiar y abrir"**, copias
   la respuesta y abres la reseña para pegarla.
 - **Resumen diario** por correo a las 10:00 con lo pendiente por local.

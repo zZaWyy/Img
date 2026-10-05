@@ -78,6 +78,7 @@ const HOJA = {
   RESTAURANTES: 'Restaurantes',
   EJEMPLOS: 'Ejemplos',
   PROMPT: 'Prompt',
+  PUBLICADAS: 'Publicadas',
 };
 
 const CABECERA = ['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Idioma',
@@ -320,6 +321,7 @@ function instalar() {
   prepararHojaRestaurantes_();
   const primeraVez = prepararHojaEjemplos_();
   prepararHojaPrompt_();
+  prepararHojaPublicadas_();
 
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'ciclo')
@@ -433,17 +435,36 @@ function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
   const version = props.getProperty('VERSION');
-  if (version === '3.2') return;
-  if (version !== '3' && version !== '3.1') {
-    pedirRecuperacion_();        // rescata las reseñas sin responder del último mes
-  }
-  if (version !== '3.1') {
+  if (version === '3.3') return;
+  const antesDe = v => !version || Number(version) < v;
+  if (antesDe(3)) pedirRecuperacion_();   // rescata las reseñas sin responder del último mes
+  if (antesDe(3.1)) {
     desactivarEjemplosMalos_();  // ejemplos respondidos en otro idioma
     rehacerBorradoresEnOtroIdioma_();
   }
-  prepararHojaRespuestas_();     // columna "Respuesta en español"
-  actualizarEnlacesResponder_();
-  props.setProperty('VERSION', '3.2');
+  if (antesDe(3.2)) {
+    prepararHojaRespuestas_();   // columna "Respuesta en español"
+    actualizarEnlacesResponder_();
+  }
+  prepararHojaPublicadas_();
+  props.setProperty('VERSION', '3.3');
+}
+
+/** Pestaña de solo lectura con las respuestas publicadas, de la más reciente a la más antigua. */
+function prepararHojaPublicadas_() {
+  const hoja = hoja_(HOJA.PUBLICADAS, true);
+  hoja.getRange(1, 1, 1, 9).setValues([['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Reseña',
+    'Respuesta publicada', 'Borrador de la IA', 'Borrador en español']])
+    .setFontWeight('bold').setBackground('#1a7f37').setFontColor('#ffffff');
+  hoja.setFrozenRows(1);
+  // Se rellena sola con lo que esté "Publicada ✔" en Respuestas: no hay que tocarla.
+  hoja.getRange(2, 1).setFormula('=IFERROR(SORT(CHOOSECOLS(FILTER(' + HOJA.RESPUESTAS + '!A2:Q, ' +
+    HOJA.RESPUESTAS + '!L2:L="' + ESTADO.PUBLICADA + '"), 1, 2, 3, 4, 5, 7, 14, 10, 17), 1, FALSE), ' +
+    '"Todavía no hay respuestas publicadas.")');
+  [110, 90, 150, 140, 40, 320, 380, 320, 320].forEach((a, i) => hoja.setColumnWidth(i + 1, a));
+  const filas = hoja.getMaxRows() - 1;
+  hoja.getRange(2, 1, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+  hoja.getRange(2, 1, filas, 9).setWrap(true).setVerticalAlignment('top');
 }
 
 /** Cambia los enlaces de las reseñas de Google abiertas por el de responder. */
@@ -1164,6 +1185,11 @@ function colaDatos() {
     .map((f, i) => ({ f: f, url: (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '' }))
     .filter(x => ESTADOS_ABIERTOS.indexOf(x.f[COL.ESTADO - 1]) >= 0)
     .slice(0, 300)
+    .concat(filas
+      .map((f, i) => ({ f: f, url: (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '' }))
+      .filter(x => x.f[COL.ESTADO - 1] === ESTADO.PUBLICADA &&
+        fecha_(x.f[COL.FECHA - 1]).getTime() > Date.now() - 60 * DIA)
+      .slice(0, 150))
     .map(({ f, url }) => ({
       id: f[COL.ID - 1],
       fecha: f[COL.FECHA - 1] instanceof Date ? f[COL.FECHA - 1].toISOString() : String(f[COL.FECHA - 1]),
@@ -1179,6 +1205,7 @@ function colaDatos() {
       estado: f[COL.ESTADO - 1],
       aviso: f[COL.AVISO - 1],
       respuestaEs: f[COL.RESP_ES - 1],
+      publicada: f[COL.PUBLICADA - 1],
     }));
   // Como texto JSON: si alguna celda es una fecha u otro tipo raro, google.script.run devolvería null.
   return JSON.stringify({ resenas: resenas, hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() });

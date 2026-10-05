@@ -23,7 +23,7 @@
   header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 12px 16px 8px;
     border-bottom: 1px solid var(--line); }
   h1 { font-size: 18px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
-  .tabs { display: flex; gap: 6px; overflow-x: auto; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
   .tab { border: 0; background: var(--chip); color: var(--text); padding: 7px 12px; border-radius: 999px;
     font-size: 14px; white-space: nowrap; cursor: pointer; }
   .tab.on { background: var(--accent); color: var(--accent-text); }
@@ -40,6 +40,8 @@
   .resena { margin: 10px 0 6px; white-space: pre-wrap; }
   .vacia { color: var(--muted); font-style: italic; }
   details { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .publicada { margin: 4px 0 10px; padding: 10px 12px; border-left: 3px solid var(--ok);
+    background: var(--chip); border-radius: 8px; white-space: pre-wrap; }
   .es { font-size: 14px; color: var(--muted); margin: -2px 0 8px; white-space: pre-wrap; }
   .es b { font-weight: 600; }
   .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px;
@@ -74,6 +76,7 @@
     { clave: 'listas', nombre: 'Por publicar', estados: ['Pendiente', 'Error IA (regenerar)'] },
     { clave: 'revisar', nombre: 'Revisar ⚠', estados: ['Revisar ⚠'] },
     { clave: 'negativas', nombre: 'Negativas', estados: ['A mano (negativa)'] },
+    { clave: 'publicadas', nombre: 'Publicadas ✔', estados: ['Publicada ✔'] },
   ];
   let datos = [];
   let tab = 'listas';
@@ -149,22 +152,18 @@
     const items = visibles.filter(r => enTab(r, tab));
     lista.replaceChildren();
     if (!items.length) {
-      lista.appendChild(el('p', 'vacio-lista', tab === 'listas' ? '¡Todo respondido! 🎉' : 'Nada por aquí.'));
+      lista.appendChild(el('p', 'vacio-lista', tab === 'listas' ? '¡Todo respondido! 🎉'
+        : tab === 'publicadas' ? 'Aquí aparecen las publicadas de los últimos 60 días.' : 'Nada por aquí.'));
       return;
     }
     items.forEach(r => lista.appendChild(tarjeta(r)));
   }
 
   function tarjeta(r) {
+    if (r.estado === 'Publicada ✔') return tarjetaPublicada(r);
     const negativa = r.estado === 'A mano (negativa)';
     const c = el('article', 'card' + (negativa ? ' negativa' : ''));
-    const meta = el('div', 'meta');
-    meta.appendChild(el('b', '', r.restaurante));
-    meta.appendChild(el('span', 'badge', r.plataforma));
-    meta.appendChild(el('span', 'stars', '★'.repeat(Math.max(0, r.estrellas)) + '☆'.repeat(Math.max(0, 5 - r.estrellas))));
-    meta.appendChild(el('span', '', r.cliente));
-    meta.appendChild(el('span', '', hace(r.fecha) + (r.idioma ? ' · ' + r.idioma : '')));
-    c.appendChild(meta);
+    c.appendChild(cabecera(r));
     if (r.estado === 'Error IA (regenerar)') c.appendChild(el('div', 'estado', 'La IA falló: pulsa “Otra versión”.'));
 
     c.appendChild(el('div', 'resena' + (r.resena ? '' : ' vacia'), r.resena || 'Solo puntuación, sin texto.'));
@@ -249,12 +248,66 @@
       .colaAccion(r.id, 'regenerar', { instruccion: instruccion });
   }
 
+  function cabecera(r) {
+    const meta = el('div', 'meta');
+    meta.appendChild(el('b', '', r.restaurante));
+    meta.appendChild(el('span', 'badge', r.plataforma));
+    meta.appendChild(el('span', 'stars', '★'.repeat(Math.max(0, r.estrellas)) + '☆'.repeat(Math.max(0, 5 - r.estrellas))));
+    meta.appendChild(el('span', '', r.cliente));
+    meta.appendChild(el('span', '', hace(r.fecha) + (r.idioma ? ' · ' + r.idioma : '')));
+    return meta;
+  }
+
+  // Solo lectura: lo que se publicó, para consultarlo o devolverlo a la cola.
+  function tarjetaPublicada(r) {
+    const c = el('article', 'card');
+    c.appendChild(cabecera(r));
+    c.appendChild(el('div', 'resena' + (r.resena ? '' : ' vacia'), r.resena || 'Solo puntuación, sin texto.'));
+    if (r.traduccion) {
+      const d = el('details');
+      d.appendChild(el('summary', '', 'Traducción'));
+      d.appendChild(el('div', '', r.traduccion));
+      c.appendChild(d);
+    }
+    c.appendChild(el('div', 'publicada', r.publicada || r.respuesta || '(Publicada fuera de la cola; aún no se ha leído el texto.)'));
+    if (r.respuestaEs && !r.publicada) {
+      const es = el('div', 'es');
+      es.replaceChildren(el('b', '', '🇪🇸 En español: '), document.createTextNode(r.respuestaEs));
+      c.appendChild(es);
+    }
+    const bot = el('div', 'botones');
+    if (r.url) {
+      const ver = el('button', 'b', 'Ver ↗');
+      ver.onclick = () => window.open(r.url, '_blank');
+      bot.appendChild(ver);
+    }
+    const reabrir = el('button', 'b', '↩ Devolver a pendientes');
+    reabrir.onclick = () => {
+      reabrir.disabled = true;
+      google.script.run
+        .withSuccessHandler(() => {
+          r.estado = r.estrellas < 4 ? 'A mano (negativa)' : 'Pendiente';
+          pintar();
+          toast('Devuelta a la cola', 2500);
+        })
+        .withFailureHandler(e => { reabrir.disabled = false; toast('Error: ' + e.message, 5000); })
+        .colaAccion(r.id, 'reabrir', {});
+    };
+    bot.appendChild(reabrir);
+    c.appendChild(bot);
+    return c;
+  }
+
   function marcar(r, card, accion, texto, boton) {
     boton.disabled = true;
     google.script.run
       .withSuccessHandler(() => {
         card.classList.add('fuera');
-        setTimeout(() => { datos = datos.filter(x => x.id !== r.id); pintar(); }, 250);
+        setTimeout(() => {
+          if (accion === 'publicada') { r.estado = 'Publicada ✔'; r.publicada = texto; }
+          else datos = datos.filter(x => x.id !== r.id);
+          pintar();
+        }, 250);
         toast(accion === 'publicada' ? 'Marcada como publicada ✔' : 'Descartada', 2500);
       })
       .withFailureHandler(e => { boton.disabled = false; toast('Error: ' + e.message, 5000); })
