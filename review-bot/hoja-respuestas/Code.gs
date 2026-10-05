@@ -1,8 +1,8 @@
 /**
  * Unicum Group — Hoja de borradores de respuesta a reseñas de Google.
  *
- * Qué hace (solo, cada hora, en los servidores de Google):
- *   1. Lee las reseñas más recientes de cada restaurante en Google Maps
+ * Qué hace (solo, cada media hora, en los servidores de Google):
+ *   1. Cada hora lee las reseñas nuevas de cada restaurante en Google Maps
  *      (con el lector público de Apify; no toca la cuenta del negocio).
  *   2. Apunta en la pestaña "Respuestas" las reseñas nuevas sin contestar.
  *   3. Redacta con Gemini un borrador para las de 4-5★, con el prompt de la
@@ -21,11 +21,12 @@ const CONFIG = {
   APIFY_ACTOR: 'compass~google-maps-reviews-scraper',
   // Alias que siempre apunta al modelo Flash vigente (capa gratuita).
   GEMINI_MODEL: 'gemini-flash-latest',
-  // Cada cuántas horas se leen las reseñas en Google Maps. Con 12 h,
-  // 20 reseñas y 11 restaurantes el coste de Apify (~3 $/mes) cabe en
-  // los 5 $/mes gratuitos. Bajarlo aumenta el coste.
-  HORAS_ENTRE_LECTURAS: 12,
-  RESENAS_POR_RESTAURANTE: 20,
+  // Cada cuántas horas se leen las reseñas en Google Maps. Cada lectura
+  // pide solo las reseñas publicadas desde la anterior, y Apify cobra
+  // por reseña leída: leer a menudo apenas encarece.
+  HORAS_ENTRE_LECTURAS: 1,
+  // Tope de reseñas por restaurante en cada lectura (seguridad de coste).
+  RESENAS_POR_RESTAURANTE: 100,
   // Reseñas más antiguas que esto no se apuntan. Con 7 días la primera
   // lectura cabe en los límites gratuitos; subidlo después si queréis
   // recuperar reseñas antiguas sin contestar.
@@ -143,9 +144,9 @@ function instalar() {
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'ciclo')
     .forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('ciclo').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('ciclo').timeBased().everyMinutes(30).create();
 
-  ui.alert('Listo. La hoja se actualizará sola cada hora.\n\n' +
+  ui.alert('Listo. La hoja se actualizará sola cada media hora.\n\n' +
     'Ahora pulsa Reseñas → "Buscar reseñas nuevas ahora". La primera lectura ' +
     'de Google Maps tarda unos minutos: vuelve a pulsarlo pasados 5-10 minutos ' +
     'para ver los borradores (o espera a la siguiente hora).');
@@ -237,24 +238,39 @@ function incorporarUltimaLectura_() {
       .sort({ column: COL.FECHA, ascending: false });
   }
   props.setProperty('ULTIMA_LECTURA_INCORPORADA', ultima.data.id);
+  // La próxima lectura pedirá las reseñas desde que empezó esta, así que
+  // una lectura fallida nunca deja huecos.
+  props.setProperty('INICIO_ULTIMA_LECTURA_OK',
+    String(Date.parse(ultima.data.startedAt) || Date.now()));
 }
 
 /** Lanza una nueva lectura en Apify si ha pasado el tiempo configurado. */
 function lanzarLecturaSiToca_() {
   const props = PropertiesService.getScriptProperties();
   const ultimoInicio = Number(props.getProperty('ULTIMO_INICIO_LECTURA') || 0);
-  if (Date.now() - ultimoInicio < CONFIG.HORAS_ENTRE_LECTURAS * 3600 * 1000) return;
+  // 5 minutos de margen: los activadores de Google no son exactos al minuto.
+  if (Date.now() - ultimoInicio < CONFIG.HORAS_ENTRE_LECTURAS * 3600e3 - 5 * 60e3) return;
 
   const enCurso = apify_('GET', 'acts/' + CONFIG.APIFY_ACTOR + '/runs/last');
   if (enCurso && enCurso.data && ['READY', 'RUNNING'].indexOf(enCurso.data.status) >= 0) return;
+  // Si la última lectura terminó pero aún no se ha pasado a la hoja, se
+  // espera a la próxima vuelta para no pedir de nuevo las mismas reseñas.
+  if (enCurso && enCurso.data && enCurso.data.status === 'SUCCEEDED' &&
+      props.getProperty('ULTIMA_LECTURA_INCORPORADA') !== enCurso.data.id) return;
 
   const urls = leerRestaurantes_().filter(r => r.activo && r.url).map(r => ({ url: r.url }));
   if (!urls.length) return;
+  // Solo reseñas desde el inicio de la última lectura incorporada, con una
+  // hora de margen (las repetidas se descartan). La primera vez, los
+  // últimos DIAS_MAXIMOS días.
+  const desde = Number(props.getProperty('INICIO_ULTIMA_LECTURA_OK') || 0);
+  const horas = desde ? Math.ceil((Date.now() - desde) / 3600e3) + 1 : CONFIG.DIAS_MAXIMOS * 24;
   const maxItems = urls.length * CONFIG.RESENAS_POR_RESTAURANTE; // tope de coste
   apify_('POST', 'acts/' + CONFIG.APIFY_ACTOR + '/runs?maxItems=' + maxItems, {
     startUrls: urls,
     maxReviews: CONFIG.RESENAS_POR_RESTAURANTE,
-    reviewsSort: 'newest',
+    reviewsSort: 'newest', // obligatorio para usar reviewsStartDate
+    reviewsStartDate: horas + ' hours',
     language: 'es',
     personalData: true,
   });

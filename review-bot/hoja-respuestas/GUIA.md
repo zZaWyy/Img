@@ -1,8 +1,10 @@
 # Hoja de respuestas a reseñas: guía de instalación
 
-Una hoja de Google que se rellena sola cada hora con las reseñas nuevas de
+Una hoja de Google que se rellena sola con las reseñas nuevas de
 Google de los 11 restaurantes y **la respuesta ya redactada** con el
-prompt de la casa. Entras cuando quieras, copias, pegas en Google y listo.
+prompt de la casa. Una reseña aparece con su borrador **en una hora de
+media** (como mucho, hora y media). Entras cuando quieras, copias, pegas en
+Google y listo.
 
 - Las de **4-5★** traen borrador, en el idioma del cliente.
 - Las de **1-3★** salen en rojo, **sin borrador**: se responden a mano.
@@ -89,8 +91,8 @@ un local (columna "Activo" en "No"), sin tocar el programa.
    redactando, hasta 25 por vez. El resto se redacta solo en las horas
    siguientes.
 
-A partir de aquí funciona solo: cada hora revisa y redacta, y cada 12
-horas vuelve a leer Google Maps.
+A partir de aquí funciona solo: cada hora lee las reseñas nuevas de Google
+Maps y cada media hora las pasa a la hoja y redacta los borradores.
 
 ---
 
@@ -100,8 +102,8 @@ horas vuelve a leer Google Maps.
    **Respuesta propuesta**.
 2. Copia la respuesta → pulsa **Abrir ↗** → en Google, **Responder** →
    pega → **Publicar**.
-3. No hace falta marcar nada: en la siguiente lectura (como mucho 12 h)
-   la fila pasa a **Publicada ✔** sola. Si quieres, márcala tú en la
+3. No hace falta marcar nada: en la siguiente lectura en la que vuelva a
+   aparecer esa reseña, la fila pasa a **Publicada ✔** sola. Si quieres, márcala tú en la
    columna Estado.
 
 **Colores:** rojo = negativa (a mano) · verde = publicada · amarillo =
@@ -123,17 +125,19 @@ respuesta de la fila seleccionada**.
 |---|---|
 | Hoja y programa (Google Apps Script) | Gratis |
 | Redacción (Gemini, capa gratuita) | Gratis |
-| Lectura de reseñas (Apify) | 5 $/mes gratis. La configuración actual (11 locales × 20 reseñas × 2 lecturas al día) ronda los 3 $/mes, dentro de lo gratuito |
+| Lectura de reseñas (Apify) | 5 $/mes gratis. Cada lectura pide solo las reseñas nuevas y Apify cobra unos 0,30 $ por cada 1.000 leídas: con vuestro volumen son céntimos al mes, dentro de lo gratuito |
 
-Puedes ver lo gastado en Apify en **Billing → Usage**. Apify no cobra nada
+La primera semana, echa un vistazo a lo gastado en Apify (**Billing →
+Usage**) para confirmarlo. Apify no cobra nada
 si no añades tarjeta: como mucho, deja de leer hasta el mes siguiente.
 
 ## Ajustes
 
 Al principio del programa (`Code.gs`), en el bloque `CONFIG`:
 
-- `HORAS_ENTRE_LECTURAS` (12): cada cuánto se leen las reseñas. Menos
-  horas = reseñas antes, pero más gasto en Apify.
+- `HORAS_ENTRE_LECTURAS` (1): cada cuánto se leen las reseñas nuevas. Se
+  puede poner `0.5` (media hora), pero no hará que aparezcan mucho antes,
+  porque la hoja se revisa cada media hora.
 - `DIAS_MAXIMOS` (7): antigüedad máxima de las reseñas que se apuntan.
   Súbelo a 30 para recuperar reseñas antiguas sin contestar. Tardará unos
   días en redactarlas todas por los límites gratuitos.
@@ -148,7 +152,8 @@ Tras cambiar algo: guardar 💾. No hace falta reinstalar.
 - Lee la **información pública** de Google Maps (no la API oficial). No
   entra en vuestra cuenta, así que las fichas no corren ningún riesgo. Si
   Google cambia su web, Apify suele actualizar su lector en pocos días.
-- Una reseña puede tardar **hasta 12 h** en aparecer en la hoja.
+- Una reseña tarda **alrededor de una hora** (como mucho, hora y media) en
+  aparecer en la hoja con su borrador.
 - **TripAdvisor no está incluido** todavía. Se puede añadir más adelante
   con el lector de TripAdvisor de Apify.
 - Si aparece **"Error IA (regenerar)"**: selecciona la fila → Regenerar.
