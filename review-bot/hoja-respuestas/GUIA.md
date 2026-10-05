@@ -1,4 +1,4 @@
-# Sistema de respuestas a reseñas (versión 2): guía
+# Sistema de respuestas a reseñas (versión 3): guía
 
 Una hoja de Google que se rellena sola con las reseñas nuevas de **Google y
 TripAdvisor** de todos los locales y **la respuesta ya redactada** con el
@@ -22,6 +22,13 @@ estilo de la casa. Publicas desde el móvil con dos toques.
 - **Cola en el móvil:** una página donde, con **"Copiar y abrir"**, copias
   la respuesta y abres la reseña para pegarla.
 - **Resumen diario** por correo a las 10:00 con lo pendiente por local.
+- **Informe semanal** cada lunes a las 9:00: nota media de cada local
+  (comparada con la semana anterior), lo que más se elogia, las quejas que
+  se repiten y una acción concreta por local.
+- **Aviso si se atasca:** si hay reseñas esperando y la IA lleva 6 horas
+  sin redactar ninguna, os llega un correo con el motivo.
+- **Recupera las atrasadas:** con un clic busca las reseñas del último mes
+  que siguen sin responder.
 - Sabe cuándo ya está publicada y la marca **Publicada ✔** sola.
 
 Coste: **0 €** dentro de los planes gratuitos (ver "Costes").
@@ -77,8 +84,9 @@ desactiva un local (Activo = No).
 
 **Reseñas → ▶ Buscar reseñas nuevas ahora.** La primera vez lee además
 vuestras respuestas antiguas para aprender el estilo. Vuelve a pulsarlo
-pasados **5-10 minutos**: aparecerán las reseñas de los últimos 7 días y la
-pestaña **Ejemplos** se llenará con vuestras respuestas reales.
+pasados **5-10 minutos**, un par de veces: la pestaña **Ejemplos** se
+llenará con vuestras respuestas reales y aparecerán las reseñas del último
+mes que siguen sin responder.
 
 ### Paso 6: Publicar la cola en el móvil
 
@@ -97,9 +105,8 @@ y en los correos.
 > cuentas de Google iniciadas en el mismo navegador. Ábrela en una ventana
 > de incógnito con solo `simsalabimgrupo` iniciada.
 >
-> **Para que la use más gente del equipo:** en el punto 3, elige "Cualquier
-> persona con cuenta de Google". Quien tenga el enlace podrá usarla, así que
-> no lo compartáis fuera del equipo.
+> **Para que la use más gente del equipo:** ver "Compartir la cola con el
+> equipo" más abajo.
 
 ### Paso 7 (opcional): Asistentes
 
@@ -124,13 +131,43 @@ Gem de Gemini y Skill de Claude: ver la sección "Asistentes" más abajo.
 **Desde la hoja:** misma información en columnas. Para regenerar, escribe
 en *Instrucción (->)*, selecciona la fila y pulsa **Reseñas → ↻ Regenerar**.
 
+**Menú Reseñas, de un vistazo:**
+
+| Opción | Para qué |
+|---|---|
+| ▶ Buscar reseñas nuevas ahora | No esperar a la siguiente media hora |
+| ↻ Regenerar respuesta de la fila seleccionada | Otra versión desde la hoja |
+| 📱 Abrir la cola de respuestas | El enlace de la cola |
+| 📥 Recuperar reseñas sin responder (último mes) | Rescatar las atrasadas |
+| 📊 Enviar el informe semanal ahora | Recibirlo sin esperar al lunes |
+| 🎓 Aprender de respuestas antiguas | Volver a leer vuestro estilo |
+| 💳 Gemini de pago: activar / desactivar | Ver "Gemini de pago" |
+| 💶 Ver gasto de Apify | Cuánto va del mes |
+| 🔑 Cambiar claves | Cambiar el token de Apify o la clave de Gemini |
+| ⚙ Instalar / reparar | Primera instalación o si algo se rompe |
+
+## Informe semanal
+
+Llega los **lunes a las 9:00** con los últimos 7 días:
+
+- Reseñas, nota media, negativas y pendientes **por local**. A partir de la
+  tercera semana, cada nota se compara con la de la semana anterior
+  (▲ sube, ▼ baja).
+- Por local: 👍 lo que más se elogia, 👎 las quejas (con cuántas reseñas
+  las mencionan si se repiten) y 👉 una acción concreta.
+
+Para cambiar el día o la hora, o desactivarlo: `INFORME_SEMANAL_DIA` e
+`INFORME_SEMANAL_HORA` en *Ajustes*. Si ese día la IA no tiene cupo, llega
+igualmente con las cifras.
+
 Colores: rojo = negativa · naranja = revisar · amarillo = error de IA · verde
 = publicada · gris = descartada.
 
 ## Cómo aprende
 
 - **Pestaña Ejemplos:** respuestas reales vuestras que la IA usa como
-  referencia de estilo. Las que no os gusten, ponedlas en **No**.
+  referencia de estilo. Las que no os gusten, ponedlas en **No**. Las
+  respondidas en otro idioma que la reseña se descartan solas.
   - *Respuesta anterior:* respondidas antes del sistema o fuera de él.
   - *Corregida por el equipo:* cambiasteis el borrador antes de publicar.
     Son las que más pesan.
@@ -139,6 +176,26 @@ Colores: rojo = negativa · naranja = revisar · amarillo = error de IA · verde
 - **Reseñas → 🎓 Aprender de respuestas antiguas** vuelve a leer vuestras
   respuestas pasadas cuando queráis.
 
+## Compartir la cola con el equipo
+
+Dos formas; elegid una.
+
+**A. Con el enlace (la más sencilla).** En Apps Script: **Implementar →
+Gestionar implementaciones → ✏️** → *Quién tiene acceso:* **Cualquier
+usuario con cuenta de Google** → **Implementar**. El enlace no cambia.
+Cualquiera que lo tenga podrá usar la cola, así que pasadlo solo por el
+grupo del equipo. Nadie puede publicar en Google desde ella; como mucho,
+marcar o descartar borradores.
+
+**B. Solo personas concretas.** Compartid la hoja con sus correos
+(**Compartir → Editor**) y, en la implementación, poned *Ejecutar como:*
+**Usuario que accede a la aplicación web** y *Quién tiene acceso:*
+**Cualquier usuario con cuenta de Google**. Solo podrán abrir la cola
+quienes tengan la hoja compartida. La primera vez, cada persona acepta los
+permisos (el mismo aviso de "Google no ha verificado esta aplicación").
+Como editores, también podrán ver las claves en la configuración del
+proyecto.
+
 ## Asistentes para lo que no es automático
 
 En la carpeta `asistentes/`:
@@ -146,6 +203,9 @@ En la carpeta `asistentes/`:
 - **Gem de Gemini** (`GEM-GEMINI.md`): un asistente en la app de Gemini
   conectado a esta hoja (keywords y ejemplos en vivo), para TripAdvisor a
   mano, negativas o respuestas sueltas. Aquí sí aprovechas tu Gemini Plus.
+  En [gemini.google.com](https://gemini.google.com) → **Gems → Nuevo Gem**
+  → pega las instrucciones de `GEM-GEMINI.md` → en *Conocimiento*, añade
+  esta hoja desde Drive → **Guardar**.
 - **Skill de Claude** (`skill-claude/respuestas-resenas-unicum.zip`): lo
   mismo dentro de Claude. Se sube en claude.ai → **Ajustes → Funciones →
   Skills → Subir skill**. A partir de ahí, basta con pegar reseñas en
@@ -172,28 +232,61 @@ redacciones gratis al día. Por eso el sistema encadena modelos:
 
 Si se agotan todos, lo pendiente se redacta en la siguiente vuelta.
 
-**Opción de pago, recomendable si os importa la calidad:** activando la
-facturación de la clave de Gemini en
-[aistudio.google.com](https://aistudio.google.com) → *Billing*, todas las
-respuestas pueden ir con Flash, sin límites diarios, por unos **2-4 € al
-mes** con vuestro volumen. La suscripción Gemini Plus no incluye uso de esta
-API: son productos distintos.
-
 **Primera semana:** mira el gasto en Apify (**Reseñas → 💶 Ver gasto de
-Apify**) para confirmar las cifras.
+Apify**) para confirmar las cifras. Recuperar las reseñas del último mes
+cuesta unos céntimos.
+
+## Gemini de pago (recomendado si os importa la calidad)
+
+Con la facturación activada, **todas** las respuestas van con el mejor
+modelo, sin límites diarios y más rápido, por unos **2-4 € al mes** con
+vuestro volumen. Además, en el plan de pago Google no usa los textos de las
+reseñas para entrenar sus modelos. La suscripción Gemini Plus no incluye
+uso de esta API: son productos distintos.
+
+1. [aistudio.google.com](https://aistudio.google.com) con
+   `simsalabimgrupo@gmail.com` → **Get API key** → en la fila de vuestra
+   clave, **Set up billing** (o *Configurar facturación*) → añade una
+   tarjeta. La clave es la misma: no hay que cambiar nada en la hoja.
+2. Pon un tope de seguridad:
+   [console.cloud.google.com/billing](https://console.cloud.google.com/billing)
+   → **Presupuestos y alertas → Crear presupuesto** → 5 € al mes, con
+   avisos al 50 %, 90 % y 100 %.
+3. En la hoja: **Reseñas → 💳 Gemini de pago → Sí**.
+
+Para volver al modo gratuito, pulsa otra vez **💳 Gemini de pago** (y quita
+la facturación en AI Studio si ya no la quieres).
 
 ## Ajustes
 
 Al principio de `Code.gs`, bloque `CONFIG`. Tras cambiar algo, guarda 💾:
 
 - `HORAS_ENTRE_LECTURAS` (1) y `HORAS_ENTRE_LECTURAS_TRIPADVISOR` (12).
-- `DIAS_MAXIMOS` (7): antigüedad máxima de las reseñas que se apuntan.
-  Súbelo a 30 para recuperar reseñas antiguas sin contestar.
-- `MODELOS`: orden de modelos de IA. Con facturación activada, podéis dejar
-  solo `'gemini-flash-latest'`.
+- `DIAS_MAXIMOS` (31): antigüedad máxima de las reseñas que se apuntan.
+- `DIAS_RECUPERACION` (30): hasta dónde mira **📥 Recuperar reseñas**.
+- `MODELOS`: orden de modelos de IA.
 - `EMAIL_AVISOS`: a quién llegan los correos. Vacío = la cuenta dueña de la
   hoja; varios, separados por comas.
 - `AVISAR_NEGATIVAS` (true) y `RESUMEN_DIARIO_HORA` (10; 0 lo desactiva).
+- `INFORME_SEMANAL_DIA` (1 = lunes … 7 = domingo; 0 lo desactiva) e
+  `INFORME_SEMANAL_HORA` (9).
+- `HORAS_SIN_BORRADORES_AVISO` (6): tras cuántas horas sin borradores se
+  avisa del atasco.
+
+## Actualizar el programa
+
+Cuando haya una versión nueva de `Code.gs` (o de `Cola.html`):
+
+1. En Apps Script, borra el contenido de `Código.gs`, pega el nuevo y
+   guarda 💾. Lo mismo con `Cola` si ha cambiado.
+2. **Implementar → Gestionar implementaciones → ✏️** → *Versión:* **Nueva
+   versión** → **Implementar**. Sin esto, la cola del móvil seguiría con el
+   programa anterior. El enlace no cambia.
+3. Recarga la hoja (F5) para ver el menú nuevo.
+
+**Al pasar a la versión 3** no hace falta nada más. En la siguiente vuelta,
+el sistema rescata solo las reseñas del último mes sin responder y descarta
+los ejemplos respondidos en otro idioma.
 
 ## Si ya instalaste la versión 1
 
@@ -206,6 +299,8 @@ Al principio de `Code.gs`, bloque `CONFIG`. Tras cambiar algo, guarda 💾:
    enlaces de TripAdvisor. Están en la lista `RESTAURANTES_INICIALES` del
    principio de `Code.gs`.
 4. Sigue con los pasos 5 y 6.
+
+Si la tenías en la versión 2, basta con "Actualizar el programa".
 
 ## Limitaciones
 

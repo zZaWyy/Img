@@ -1,5 +1,5 @@
 /**
- * Unicum Group — Respuestas a reseñas de Google y TripAdvisor (versión 2).
+ * Unicum Group — Respuestas a reseñas de Google y TripAdvisor (versión 3).
  *
  * Funciona solo, cada media hora, en los servidores de Google:
  *   1. Lee las reseñas nuevas de cada restaurante (Google Maps cada hora,
@@ -13,6 +13,8 @@
  *   4. Cuando detecta la respuesta publicada, marca "Publicada ✔". Si el
  *      equipo la cambió respecto al borrador, guarda la versión final
  *      como ejemplo: el sistema aprende de vuestras correcciones.
+ *   5. Cada lunes manda un informe con la nota media de cada local y lo
+ *      que más se elogia y se critica; avisa si la IA deja de redactar.
  *
  * Publicar sigue siendo manual, idealmente desde la cola del móvil
  * (archivo Cola.html, se publica como aplicación web). Ver GUIA.md.
@@ -29,7 +31,9 @@ const CONFIG = {
   // con retraso y detecta las respuestas ya publicadas.
   DIAS_REPASO: 3,
   RESENAS_POR_RESTAURANTE: 100,          // tope por local y lectura
-  DIAS_MAXIMOS: 7,                       // reseñas más antiguas no se apuntan
+  DIAS_MAXIMOS: 31,                      // reseñas más antiguas no se apuntan
+  // "Recuperar reseñas sin responder": hasta cuántos días atrás mira.
+  DIAS_RECUPERACION: 30,
   // Gasto mensual de Apify (de 5 $ gratis) a partir del cual solo se hace
   // el repaso diario.
   APIFY_PRESUPUESTO_USD: 4.5,
@@ -53,6 +57,12 @@ const CONFIG = {
   EMAIL_AVISOS: '',                      // vacío = el de la cuenta dueña; varios, separados por comas
   AVISAR_NEGATIVAS: true,
   RESUMEN_DIARIO_HORA: 10,               // hora de Madrid; 0 = sin resumen
+  // Informe semanal (quejas y elogios que se repiten, nota media por local).
+  INFORME_SEMANAL_DIA: 1,                // 1 = lunes … 7 = domingo; 0 = sin informe
+  INFORME_SEMANAL_HORA: 9,               // hora de Madrid
+  // Aviso si hay reseñas esperando borrador y la IA lleva este tiempo sin
+  // redactar ninguno (cupo agotado, clave caducada…).
+  HORAS_SIN_BORRADORES_AVISO: 6,
 };
 
 const ZONA = 'Europe/Madrid';
@@ -181,7 +191,7 @@ const FUENTES = {
     entrada: (urls, tipo, desde) => {
       const e = {
         startUrls: urls.map(u => ({ url: u })),
-        maxReviews: tipo === 'estilo' ? 60 : CONFIG.RESENAS_POR_RESTAURANTE,
+        maxReviews: tipo === 'estilo' ? 60 : tipo === 'recuperar' ? 300 : CONFIG.RESENAS_POR_RESTAURANTE,
         reviewsSort: 'newest', // obligatorio para usar reviewsStartDate
         language: 'es',
         personalData: true,
@@ -215,7 +225,7 @@ const FUENTES = {
     entrada: (urls, tipo, desde) => {
       const e = {
         startUrls: urls.map(u => ({ url: u })),
-        maxItemsPerQuery: tipo === 'estilo' ? 40 : CONFIG.RESENAS_POR_RESTAURANTE,
+        maxItemsPerQuery: tipo === 'estilo' ? 40 : tipo === 'recuperar' ? 150 : CONFIG.RESENAS_POR_RESTAURANTE,
       };
       if (tipo !== 'estilo') {
         e.lastReviewDate = Utilities.formatDate(
@@ -252,7 +262,10 @@ function onOpen() {
     .addItem('↻ Regenerar respuesta de la fila seleccionada', 'regenerarFilaSeleccionada')
     .addItem('📱 Abrir la cola de respuestas', 'mostrarEnlaceCola')
     .addSeparator()
+    .addItem('📥 Recuperar reseñas sin responder (último mes)', 'pedirRecuperacion')
+    .addItem('📊 Enviar el informe semanal ahora', 'enviarInformeAhora')
     .addItem('🎓 Aprender de respuestas antiguas', 'pedirEjemplos')
+    .addItem('💳 Gemini de pago: activar / desactivar', 'alternarGeminiPago')
     .addItem('💶 Ver gasto de Apify', 'mostrarGastoApify')
     .addItem('🔑 Cambiar claves', 'cambiarClaves')
     .addItem('⚙ Instalar / reparar', 'instalar')
@@ -342,6 +355,48 @@ function pedirEjemplos_() {
   Object.keys(FUENTES).forEach(c => props.setProperty('ESTILO_PEDIDO_' + c, '1'));
 }
 
+function pedirRecuperacion() {
+  pedirRecuperacion_();
+  SpreadsheetApp.getUi().alert('En la próxima vuelta (como mucho media hora, o pulsando "Buscar reseñas ' +
+    'nuevas ahora") se leerán las reseñas del último mes y se añadirán las que sigan sin responder. ' +
+    'Los borradores se irán redactando en las horas siguientes, de las más recientes a las más antiguas.');
+}
+
+function pedirRecuperacion_() {
+  const props = PropertiesService.getScriptProperties();
+  Object.keys(FUENTES).forEach(c => props.setProperty('RECUPERAR_PEDIDO_' + c, '1'));
+}
+
+/** Con la facturación de Gemini activada, todo va al mejor modelo y más rápido. */
+function alternarGeminiPago() {
+  const props = PropertiesService.getScriptProperties();
+  const ui = SpreadsheetApp.getUi();
+  if (props.getProperty('GEMINI_PAGO')) {
+    props.deleteProperty('GEMINI_PAGO');
+    ui.alert('Modo gratuito: Gemini Flash para las reseñas largas mientras haya cupo, y modelos más ligeros para el resto.');
+  } else {
+    const r = ui.alert('¿Has activado la facturación de tu clave de Gemini en AI Studio? ' +
+      '(Si no, las respuestas fallarían por falta de cupo.)', ui.ButtonSet.YES_NO);
+    if (r !== ui.Button.YES) return;
+    props.setProperty('GEMINI_PAGO', '1');
+    ui.alert('Modo de pago activado ✔ Todas las respuestas usarán el mejor modelo (coste estimado: 2-4 € al mes).');
+  }
+}
+
+function geminiPago_() {
+  return Boolean(PropertiesService.getScriptProperties().getProperty('GEMINI_PAGO'));
+}
+
+/** Cambios que se aplican una sola vez al actualizar a esta versión. */
+function migrarVersion_() {
+  const props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
+  if (props.getProperty('VERSION') === '3') return;
+  pedirRecuperacion_();          // rescata las reseñas sin responder del último mes
+  desactivarEjemplosMalos_();    // ejemplos respondidos en otro idioma
+  props.setProperty('VERSION', '3');
+}
+
 function mostrarGastoApify() {
   const gasto = gastoApify_(true);
   SpreadsheetApp.getUi().alert(gasto === null
@@ -368,6 +423,8 @@ function mostrarEnlaceCola() {
 // ======================================================================= ciclo
 
 function ciclo() {
+  const inicio = Date.now();
+  try { migrarVersion_(); } catch (e) { console.warn('migración: ' + e); }
   Object.keys(FUENTES).forEach(clave => {
     try {
       comprobarLectura_(clave);
@@ -376,7 +433,9 @@ function ciclo() {
       avisarError_('fuente_' + clave, 'Fallo leyendo ' + FUENTES[clave].plataforma + ': ' + (e.message || e));
     }
   });
-  generarPendientes_();
+  // El informe va antes que los borradores: es una sola llamada a la IA y así no se queda sin tiempo.
+  try { enviarInformeSiToca_(); } catch (e) { avisarError_('informe', 'No se pudo enviar el informe semanal: ' + (e.message || e)); }
+  generarPendientes_(inicio);
   enviarResumenSiToca_();
 }
 
@@ -419,6 +478,7 @@ function lanzarLecturaSiToca_(clave) {
   const desdeUltima = t => ahora - Number(props.getProperty('ULTIMA_' + t + '_' + clave) || 0);
   let tipo = null;
   if (props.getProperty('ESTILO_PEDIDO_' + clave)) tipo = 'estilo';
+  else if (props.getProperty('RECUPERAR_PEDIDO_' + clave)) tipo = 'recuperar';
   else if (f.repasoDiario && desdeUltima('repaso') >= 20 * HORA) tipo = 'repaso';
   else if (desdeUltima('nuevas') >= f.horas() * HORA - 5 * MIN) tipo = 'nuevas';
   if (!tipo) return;
@@ -431,15 +491,16 @@ function lanzarLecturaSiToca_(clave) {
     return;
   }
 
-  const desde = tipo === 'repaso'
-    ? ahora - CONFIG.DIAS_REPASO * DIA
-    : Number(props.getProperty('OK_' + clave)) || ahora - CONFIG.DIAS_MAXIMOS * DIA;
+  const desde = tipo === 'repaso' ? ahora - CONFIG.DIAS_REPASO * DIA
+    : tipo === 'recuperar' ? ahora - CONFIG.DIAS_RECUPERACION * DIA
+    : Number(props.getProperty('OK_' + clave)) || ahora - CONFIG.DIAS_REPASO * DIA;
   const entrada = f.entrada(urls, tipo, desde);
   const porLocal = entrada.maxReviews || entrada.maxItemsPerQuery || CONFIG.RESENAS_POR_RESTAURANTE;
   const run = apify_('POST', 'acts/' + f.actor + '/runs?maxItems=' + urls.length * porLocal, entrada);
   props.setProperty('LECTURA_' + clave, JSON.stringify({ id: run.data.id, tipo: tipo, inicio: ahora }));
   props.setProperty('ULTIMA_' + tipo + '_' + clave, String(ahora));
   if (tipo === 'estilo') props.deleteProperty('ESTILO_PEDIDO_' + clave);
+  if (tipo === 'recuperar') props.deleteProperty('RECUPERAR_PEDIDO_' + clave);
 }
 
 /** Pasa a la hoja las reseñas de una lectura y aprende de las ya respondidas. */
@@ -515,12 +576,16 @@ function aprenderDeFila_(valores, textoFinal) {
 
 // ================================================================== redacción
 
-/** Redacta los borradores que falten (filas "Pendiente" sin respuesta). */
-function generarPendientes_() {
+/**
+ * Redacta los borradores que falten (filas "Pendiente" sin respuesta).
+ * El tiempo cuenta desde "inicio" (el principio de la vuelta), porque
+ * Google corta cualquier ejecución que pase de 6 minutos.
+ */
+function generarPendientes_(inicio) {
   const props = PropertiesService.getScriptProperties();
   if (Number(props.getProperty('GENERANDO_HASTA') || 0) > Date.now()) return;
   props.setProperty('GENERANDO_HASTA', String(Date.now() + CONFIG.TIEMPO_MAXIMO_MS + MIN));
-  const inicio = Date.now();
+  inicio = inicio || Date.now();
   try {
     const contexto = cargarContexto_();
     const pendientes = contexto.filas.filter(f =>
@@ -534,6 +599,7 @@ function generarPendientes_() {
         const salida = redactar_(fila, contexto, '');
         guardarRedaccion_(id, salida, '');
         contexto.anotarApertura(fila[COL.RESTAURANTE - 1], salida.respuesta);
+        props.setProperty('ULTIMO_BORRADOR', String(Date.now()));
       } catch (e) {
         if (e.limite) break; // sin cupo en ningún modelo: se sigue más tarde
         if (e.tipo === 'clave') {
@@ -550,11 +616,28 @@ function generarPendientes_() {
         });
       }
       hechos++;
-      Utilities.sleep(CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
+      Utilities.sleep(geminiPago_() ? 1500 : CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
     }
+    comprobarAtasco_(Math.max(0, pendientes.length - hechos));
   } finally {
     props.deleteProperty('GENERANDO_HASTA');
   }
+}
+
+/** Avisa si hay reseñas esperando y la IA lleva horas sin redactar nada. */
+function comprobarAtasco_(pendientes) {
+  const props = PropertiesService.getScriptProperties();
+  if (!pendientes) { props.deleteProperty('PENDIENTES_DESDE'); return; }
+  if (!props.getProperty('PENDIENTES_DESDE')) props.setProperty('PENDIENTES_DESDE', String(Date.now()));
+  // Se cuenta desde lo más reciente: el último borrador o el momento en que empezó a haber cola.
+  const desde = Math.max(Number(props.getProperty('ULTIMO_BORRADOR') || 0),
+    Number(props.getProperty('PENDIENTES_DESDE')));
+  const horas = (Date.now() - desde) / HORA;
+  if (horas < CONFIG.HORAS_SIN_BORRADORES_AVISO) return;
+  const error = props.getProperty('ULTIMO_ERROR_IA') || 'sin detalle';
+  avisarError_('atasco', 'Hay ' + pendientes + ' reseñas esperando borrador y la IA lleva ' + Math.floor(horas) +
+    ' horas sin redactar ninguno. Último error: ' + error + '. Si es por cupo, se arregla solo al día ' +
+    'siguiente; con la facturación de Gemini activada no vuelve a pasar.');
 }
 
 /** Menú de la hoja: vuelve a redactar la fila seleccionada. */
@@ -669,19 +752,28 @@ function redactar_(fila, contexto, instruccion, manual) {
   if (pedirTraduccion) p.push('\nIncluye en "traduccion" la traducción de la reseña al español.');
 
   const largo = texto.length >= CONFIG.LONGITUD_RESENA_CORTA;
-  return llamarIA_(contexto.prompt, p.join('\n'), manual || largo ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
+  const mejor = manual || largo || geminiPago_();
+  return llamarIA_(contexto.prompt, p.join('\n'), mejor ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
 }
 
-/** Prueba los modelos en orden, saltando los que no tienen cupo. */
-function llamarIA_(sistema, usuario, desde) {
-  const modelos = CONFIG.MODELOS.slice(Math.min(desde, CONFIG.MODELOS.length - 1));
+/**
+ * Prueba los modelos en orden, saltando los que no tienen cupo. Con
+ * "esquema" (informe semanal) solo usa los Gemini, que devuelven JSON.
+ */
+function llamarIA_(sistema, usuario, desde, esquema) {
+  const modelos = CONFIG.MODELOS.slice(Math.min(desde, CONFIG.MODELOS.length - 1))
+    .filter(m => !esquema || m.indexOf('gemini') === 0);
   for (const modelo of modelos) {
     if (modeloEnPausa_(modelo)) continue;
     try {
-      const salida = llamarModelo_(modelo, sistema, usuario);
+      const salida = llamarModelo_(modelo, sistema, usuario, esquema);
       salida.modelo = modelo;
       return salida;
     } catch (e) {
+      const motivo = e.tipo === 'cuota' ? modelo + ' sin cupo ' + (e.diaria ? 'para hoy' : 'por unos minutos')
+        : String(e.message || e).slice(0, 200);
+      PropertiesService.getScriptProperties().setProperty('ULTIMO_ERROR_IA',
+        Utilities.formatDate(new Date(), ZONA, 'dd/MM HH:mm') + ' · ' + motivo);
       if (e.tipo === 'cuota') { pausarModelo_(modelo, e.diaria ? 3 * HORA : 2 * MIN); continue; }
       if (e.tipo === 'temporal') { pausarModelo_(modelo, 5 * MIN); continue; }
       if (e.tipo === 'vacio') continue; // respuesta vacía o mal formada: probar el siguiente
@@ -699,19 +791,19 @@ function llamarIA_(sistema, usuario, desde) {
   throw err;
 }
 
-function llamarModelo_(modelo, sistema, usuario) {
+function llamarModelo_(modelo, sistema, usuario, esquema) {
   // Gemini: instrucciones de sistema y salida JSON con aviso y traducción.
   // Gemma: todo en un único mensaje y salida de texto plano.
   const json = modelo.indexOf('gemini') === 0;
   const cuerpo = {
     contents: [{ role: 'user', parts: [{ text: json ? usuario : sistema + '\n\n---\n\n' + usuario +
       '\n\nDevuelve solo el texto de la respuesta.' }] }],
-    generationConfig: { temperature: 0.9, maxOutputTokens: 2048 },
+    generationConfig: esquema ? { temperature: 0.3, maxOutputTokens: 8192 } : { temperature: 0.9, maxOutputTokens: 2048 },
   };
   if (json) {
     cuerpo.systemInstruction = { parts: [{ text: sistema }] };
     cuerpo.generationConfig.responseMimeType = 'application/json';
-    cuerpo.generationConfig.responseSchema = ESQUEMA_RESPUESTA;
+    cuerpo.generationConfig.responseSchema = esquema || ESQUEMA_RESPUESTA;
   }
   const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' +
     modelo + ':generateContent', {
@@ -748,6 +840,7 @@ function llamarModelo_(modelo, sistema, usuario) {
   } catch (e) {
     throw fallo('vacio');
   }
+  if (esquema) return obj;
   if (!obj.respuesta) throw fallo('vacio');
   return {
     respuesta: limpiarRespuesta_(obj.respuesta),
@@ -814,6 +907,7 @@ function agregarEjemplos_(lista, origen) {
   const nuevas = [];
   lista.forEach(r => {
     if (!r.id || ids[r.id]) return;
+    if (idiomaDistinto_(r.idioma, r.respuestaPropietario)) return; // mal ejemplo: otro idioma
     if (origen === ORIGEN.HISTORICO) {
       if ((historicos[r.restaurante] || 0) >= MAX_HISTORICOS_POR_LOCAL) return;
       historicos[r.restaurante] = (historicos[r.restaurante] || 0) + 1;
@@ -823,6 +917,56 @@ function agregarEjemplos_(lista, origen) {
       recortar_(r.respuestaPropietario, 1000), origen, r.id]);
   });
   if (nuevas.length) hoja.getRange(ultima + 1, 1, nuevas.length, CABECERA_EJEMPLOS.length).setValues(nuevas);
+}
+
+
+/** Pone "No" a los ejemplos cuya respuesta está en otro idioma que la reseña. */
+function desactivarEjemplosMalos_() {
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.EJEMPLOS);
+  if (!hoja || hoja.getLastRow() < 2) return 0;
+  const rango = hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA_EJEMPLOS.length);
+  const filas = rango.getValues();
+  let cambiados = 0;
+  filas.forEach((f, i) => {
+    if (String(f[CE.USAR - 1]).toLowerCase().startsWith('s') &&
+        idiomaDistinto_(f[CE.IDIOMA - 1], f[CE.RESPUESTA - 1])) {
+      hoja.getRange(i + 2, CE.USAR).setValue('No');
+      cambiados++;
+    }
+  });
+  return cambiados;
+}
+
+const PALABRAS_IDIOMA = {
+  es: ['el', 'la', 'los', 'las', 'que', 'gracias', 'muchas', 'nos', 'por', 'una', 'muy', 'esperamos', 'pronto', 'os', 'vuestra', 'tu', 'tus', 'del', 'visita'],
+  en: ['the', 'and', 'thank', 'thanks', 'you', 'your', 'we', 'for', 'with', 'our', 'hope', 'soon', 'very', 'was', 'see', 'again'],
+  de: ['und', 'der', 'die', 'das', 'vielen', 'dank', 'wir', 'uns', 'ihr', 'ihnen', 'sehr', 'bald', 'wieder', 'freuen', 'für', 'sie'],
+  fr: ['merci', 'nous', 'vous', 'votre', 'les', 'des', 'très', 'pour', 'avec', 'bientôt', 'ravis', 'est', 'une'],
+  it: ['grazie', 'siamo', 'molto', 'il', 'vostro', 'presto', 'della', 'che', 'ci', 'tornare', 'felici'],
+  pt: ['obrigado', 'obrigada', 'muito', 'você', 'nós', 'em', 'breve', 'ficamos', 'seu', 'sua', 'até'],
+  nl: ['bedankt', 'dank', 'wij', 'jullie', 'zeer', 'voor', 'met', 'graag', 'snel', 'weer', 'het', 'een'],
+  ca: ['moltes', 'gràcies', 'gracies', 'molt', 'amb', 'tornar', 'aviat', 'vostra', 'és', 'els', 'una'],
+};
+
+/** Idioma más probable de un texto (solo los de PALABRAS_IDIOMA), o '' si no está claro. */
+function idiomaProbable_(texto) {
+  const palabras = String(texto || '').toLowerCase().split(/[^a-zà-ÿßñç]+/);
+  const cuenta = {};
+  Object.keys(PALABRAS_IDIOMA).forEach(l => {
+    const set = PALABRAS_IDIOMA[l];
+    cuenta[l] = palabras.filter(w => set.indexOf(w) >= 0).length;
+  });
+  const orden = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a]);
+  const [a, b] = [cuenta[orden[0]], cuenta[orden[1]]];
+  return a >= 3 && a >= 1.5 * b ? orden[0] : '';
+}
+
+/** true si la respuesta está claramente en otro idioma que la reseña. */
+function idiomaDistinto_(idiomaResena, respuesta) {
+  const l = String(idiomaResena || '').toLowerCase().slice(0, 2);
+  if (!PALABRAS_IDIOMA[l]) return false; // idioma que no sabemos comprobar
+  const r = idiomaProbable_(respuesta);
+  return Boolean(r) && r !== l;
 }
 
 
@@ -936,6 +1080,172 @@ function enviarResumenSiToca_() {
   enviarCorreo_(total + ' reseñas esperando respuesta',
     '<table cellpadding="6" style="border-collapse:collapse"><tr><th align="left">Local</th>' +
     '<th>Listas</th><th>Revisar ⚠</th><th>Negativas</th></tr>' + filas + '</table>' + pieCorreo_());
+}
+
+// ------------------------------------------------------------ informe semanal
+
+const ESQUEMA_INFORME = {
+  type: 'OBJECT',
+  properties: {
+    resumen: {
+      type: 'STRING',
+      description: 'Dos o tres frases para la dirección con lo más importante de la semana en todo el grupo.',
+    },
+    locales: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          restaurante: { type: 'STRING', description: 'Nombre del local tal como aparece en los datos.' },
+          elogios: {
+            type: 'ARRAY', items: { type: 'STRING' },
+            description: 'Hasta 3 cosas concretas que más se elogian (platos, personas, aspectos).',
+          },
+          quejas: {
+            type: 'ARRAY', items: { type: 'STRING' },
+            description: 'Hasta 3 problemas mencionados; si se repiten, con el número de reseñas entre paréntesis. Vacío si no hay.',
+          },
+          accion: {
+            type: 'STRING',
+            description: 'Una recomendación práctica y concreta para el local, o vacío si no hay nada que mejorar.',
+          },
+        },
+        required: ['restaurante', 'elogios', 'quejas', 'accion'],
+      },
+    },
+  },
+  required: ['resumen', 'locales'],
+};
+
+const PROMPT_INFORME = 'Analizas las reseñas de la última semana de los restaurantes de Unicum Group ' +
+  '(Mallorca) para su dirección. Por cada local con reseñas con texto, extrae lo que más se elogia, ' +
+  'las quejas y una acción concreta. Básate solo en lo que dicen las reseñas: no inventes, y no ' +
+  'conviertas un comentario aislado en tendencia salvo que sea grave (higiene, alergias, cobros, trato). ' +
+  'Nombra platos y personas cuando lo hagan los clientes. Escribe en español, en frases cortas.';
+
+function enviarInformeSiToca_() {
+  if (!CONFIG.INFORME_SEMANAL_DIA) return;
+  const ahora = new Date();
+  const hoy = Utilities.formatDate(ahora, ZONA, 'yyyy-MM-dd');
+  const diaSemana = (new Date(hoy + 'T12:00:00Z').getUTCDay() + 6) % 7 + 1; // 1 = lunes … 7 = domingo
+  if (diaSemana !== CONFIG.INFORME_SEMANAL_DIA) return;
+  if (Number(Utilities.formatDate(ahora, ZONA, 'H')) < CONFIG.INFORME_SEMANAL_HORA) return;
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('INFORME_ENVIADO') === hoy) return;
+  props.setProperty('INFORME_ENVIADO', hoy);
+  enviarInforme_();
+}
+
+function enviarInformeAhora() {
+  const enviado = enviarInforme_();
+  SpreadsheetApp.getUi().alert(enviado ? 'Informe enviado a tu correo ✔'
+    : 'No hay reseñas de los últimos 7 días en la hoja: no se ha enviado nada.');
+}
+
+/**
+ * Informe de los últimos 7 días: reseñas y nota media por local, lo que se
+ * repite en los comentarios y una acción sugerida. Devuelve false si no hay
+ * reseñas que contar.
+ */
+function enviarInforme_() {
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const ultima = hoja.getLastRow();
+  if (ultima < 2) return false;
+  const ahora = Date.now();
+  const corte = ahora - 7 * DIA;
+  const filas = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
+  const momento = f => fecha_(f[COL.FECHA - 1]).getTime();
+  const semana = filas.filter(f => momento(f) >= corte);
+  if (!semana.length) return false;
+  // La semana anterior solo es comparable cuando el sistema ya llevaba leyéndola entera.
+  const instalado = Number(PropertiesService.getScriptProperties().getProperty('INSTALADO') || ahora);
+  const anterior = ahora - instalado >= 14 * DIA
+    ? cifrasPorLocal_(filas.filter(f => momento(f) >= corte - 7 * DIA && momento(f) < corte)) : null;
+  const cifras = cifrasPorLocal_(semana);
+  const locales = Object.keys(cifras).filter(r => r !== '').sort((a, b) => cifras[b].n - cifras[a].n);
+  const total = cifras[''];
+
+  let analisis = null;
+  let sinAnalisis = false;
+  try {
+    analisis = analizarSemana_(semana);
+  } catch (e) {
+    sinAnalisis = true;
+    console.warn('Informe sin análisis: ' + e);
+  }
+
+  const nota = c => (c.suma / c.n).toFixed(1).replace('.', ',') + '★';
+  const versus = (actual, previo) => {
+    if (!previo) return '';
+    const d = actual.suma / actual.n - previo.suma / previo.n;
+    return ' <span style="color:' + (d >= 0.05 ? '#1a7f37">▲ desde ' + nota(previo)
+      : d <= -0.05 ? '#c62828">▼ desde ' + nota(previo) : '#888">=') + '</span>';
+  };
+  const h = [];
+  const rango = Utilities.formatDate(new Date(corte), ZONA, 'dd/MM') + ' – ' +
+    Utilities.formatDate(new Date(ahora), ZONA, 'dd/MM');
+  h.push('<p><b>' + total.n + ' reseñas</b> (' + rango + ') · nota media <b>' + nota(total) + '</b>' +
+    versus(total, anterior && anterior['']) + ' · ' + total.negativas +
+    (total.negativas === 1 ? ' negativa · ' : ' negativas · ') +
+    total.abiertas + ' sin responder</p>');
+  if (analisis && analisis.resumen) h.push('<p>' + esc_(analisis.resumen) + '</p>');
+  h.push('<table cellpadding="6" style="border-collapse:collapse"><tr><th align="left">Local</th>' +
+    '<th>Reseñas</th><th>Nota</th><th>Negativas</th><th>Sin responder</th></tr>' +
+    locales.map(r => '<tr><td>' + esc_(r) + '</td><td align="center">' + cifras[r].n +
+      '</td><td align="center">' + nota(cifras[r]) + versus(cifras[r], anterior && anterior[r]) +
+      '</td><td align="center">' + cifras[r].negativas + '</td><td align="center">' +
+      cifras[r].abiertas + '</td></tr>').join('') + '</table>');
+
+  if (analisis) {
+    const orden = r => { const i = locales.findIndex(l => normalizar_(l) === normalizar_(r)); return i < 0 ? 99 : i; };
+    analisis.locales.slice().sort((a, b) => orden(a.restaurante) - orden(b.restaurante)).forEach(l => {
+      const elogios = (l.elogios || []).filter(Boolean);
+      const quejas = (l.quejas || []).filter(Boolean);
+      if (!elogios.length && !quejas.length && !l.accion) return;
+      h.push('<h3 style="margin:18px 0 4px">' + esc_(l.restaurante) + '</h3>' +
+        (elogios.length ? '<div>👍 ' + esc_(elogios.join(' · ')) + '</div>' : '') +
+        (quejas.length ? '<div>👎 ' + esc_(quejas.join(' · ')) + '</div>' : '') +
+        (l.accion ? '<div>👉 <b>' + esc_(l.accion) + '</b></div>' : ''));
+    });
+  } else if (sinAnalisis) {
+    h.push('<p style="color:#888">Esta vez la IA no tenía cupo para analizar los comentarios: van solo las cifras.</p>');
+  }
+  h.push(pieCorreo_());
+  enviarCorreo_('Informe semanal: ' + total.n + ' reseñas, ' + nota(total), h.join(''));
+  return true;
+}
+
+/** Cifras por local; la clave '' guarda el total. */
+function cifrasPorLocal_(filas) {
+  const cifras = {};
+  filas.forEach(f => {
+    const estrellas = Number(f[COL.ESTRELLAS - 1]) || 0;
+    [String(f[COL.RESTAURANTE - 1] || 'Desconocido'), ''].forEach(r => {
+      const c = cifras[r] = cifras[r] || { n: 0, suma: 0, negativas: 0, abiertas: 0 };
+      c.n++;
+      c.suma += estrellas;
+      if (estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR) c.negativas++;
+      if (ESTADOS_ABIERTOS.indexOf(f[COL.ESTADO - 1]) >= 0) c.abiertas++;
+    });
+  });
+  return cifras;
+}
+
+/** Una sola llamada a la IA con los comentarios de la semana. null si no hay texto. */
+function analizarSemana_(filas) {
+  const porLocal = {};
+  filas.forEach(f => {
+    const texto = String(f[COL.TRADUCCION - 1] || f[COL.RESENA - 1] || '').replace(/\s+/g, ' ').trim();
+    if (!texto) return;
+    const r = String(f[COL.RESTAURANTE - 1] || 'Desconocido');
+    (porLocal[r] = porLocal[r] || []).push('- ' + f[COL.ESTRELLAS - 1] + '★ ' + recortar_(texto, 400));
+  });
+  const locales = Object.keys(porLocal).sort();
+  if (!locales.length) return null;
+  const usuario = locales.map(r => '## ' + r + '\n' + porLocal[r].slice(0, 40).join('\n')).join('\n\n');
+  const obj = llamarIA_(PROMPT_INFORME, usuario, 0, ESQUEMA_INFORME);
+  if (!obj || !Array.isArray(obj.locales)) throw new Error('análisis sin el formato esperado');
+  return obj;
 }
 
 /** Avisos de errores, como mucho uno cada 12 h por tipo. */
