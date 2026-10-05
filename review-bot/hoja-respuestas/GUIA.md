@@ -23,6 +23,11 @@ estilo de la casa. Publicas desde el móvil con dos toques.
   prudente (se disculpa, no inventa causas, invita a hablar en privado).
   Siempre se revisan antes de publicar; si le cuentas qué pasó, te propone
   otro mejor.
+- **Respuesta en español:** si el borrador está en otro idioma, debajo (y
+  en la columna *Respuesta en español* de la hoja) tienes qué dice.
+- **Enlace directo para responder:** en Google abre la reseña en el panel
+  del negocio, con el botón *Responder* (hay que tener iniciada la cuenta
+  que gestiona las fichas).
 - **Cola en el móvil:** una página donde, con **"Copiar y abrir"**, copias
   la respuesta y abres la reseña para pegarla.
 - **Resumen diario** por correo a las 10:00 con lo pendiente por local.

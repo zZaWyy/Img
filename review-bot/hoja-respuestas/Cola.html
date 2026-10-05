@@ -40,6 +40,8 @@
   .resena { margin: 10px 0 6px; white-space: pre-wrap; }
   .vacia { color: var(--muted); font-style: italic; }
   details { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .es { font-size: 14px; color: var(--muted); margin: -2px 0 8px; white-space: pre-wrap; }
+  .es b { font-weight: 600; }
   .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px;
     font-size: 14px; margin: 8px 0; }
   textarea { width: 100%; min-height: 110px; border: 1px solid var(--line); border-radius: 10px;
@@ -179,6 +181,14 @@
     ta.placeholder = negativa ? 'Pulsa “Redactar borrador” y cuenta qué pasó, o escribe tu respuesta.' : '';
     if (negativa && !r.respuesta) ta.style.display = 'none';
     c.appendChild(ta);
+    const es = el('div', 'es');
+    const pintarEs = texto => {
+      es.replaceChildren(el('b', '', '🇪🇸 En español: '), document.createTextNode(texto || ''));
+      es.style.display = texto ? '' : 'none';
+    };
+    pintarEs(r.respuestaEs);
+    ta.addEventListener('input', () => { if (r.respuestaEs) es.style.opacity = '.5'; });
+    c.appendChild(es);
 
     const bot = el('div', 'botones');
     const accion = (nombre, fn) => { const b = el('button', 'b', nombre); b.onclick = () => fn(b); bot.appendChild(b); return b; };
@@ -187,10 +197,10 @@
     copiar.onclick = () => copiarYAbrir(r, ta);
     if (!negativa || r.respuesta) bot.appendChild(copiar);
     if (negativa) {
-      accion(r.respuesta ? '✍ Otro borrador' : '✍ Redactar borrador', b => regenerar(r, ta, b, true, copiar, bot));
+      accion(r.respuesta ? '✍ Otro borrador' : '✍ Redactar borrador', b => regenerar(r, ta, b, true, copiar, bot, pintarEs));
       if (!r.respuesta && r.url) accion('Abrir reseña ↗', () => window.open(r.url, '_blank'));
     } else {
-      accion('↻ Otra versión', b => regenerar(r, ta, b, false));
+      accion('↻ Otra versión', b => regenerar(r, ta, b, false, null, null, pintarEs));
     }
     accion('✓ Publicada', b => marcar(r, c, 'publicada', ta.value, b)).classList.add('ok');
     accion('✕ Descartar', b => marcar(r, c, 'descartar', '', b));
@@ -215,7 +225,7 @@
              : 'No se pudo copiar sola: mantén pulsado el texto para copiarlo.', 5000);
   }
 
-  function regenerar(r, ta, boton, negativa, copiar, bot) {
+  function regenerar(r, ta, boton, negativa, copiar, bot, pintarEs) {
     const instruccion = prompt(negativa
       ? '¿Qué pasó o qué quieres transmitir? (la IA lo usará para el borrador)'
       : 'Indicación opcional para la nueva versión (p. ej. “menciona la música en directo”). Déjalo vacío para otra versión sin más.', '');
@@ -228,6 +238,8 @@
         ta.value = s.respuesta;
         ta.style.display = '';
         r.respuesta = s.respuesta;
+        r.respuestaEs = s.respuestaEs || '';
+        if (pintarEs) pintarEs(r.respuestaEs);
         if (negativa && copiar && !copiar.parentNode) bot.insertBefore(copiar, bot.firstChild);
         boton.disabled = false;
         boton.textContent = negativa ? '✍ Otro borrador' : texto;

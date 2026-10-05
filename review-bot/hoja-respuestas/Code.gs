@@ -82,11 +82,11 @@ const HOJA = {
 
 const CABECERA = ['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Idioma',
   'Reseña (original)', 'Traducción', 'Instrucción (->)', 'Respuesta propuesta',
-  'Responder', 'Estado', 'Aviso IA', 'Respuesta publicada', 'Modelo', 'ID'];
+  'Responder', 'Estado', 'Aviso IA', 'Respuesta publicada', 'Modelo', 'ID', 'Respuesta en español'];
 const COL = {
   FECHA: 1, PLATAFORMA: 2, RESTAURANTE: 3, CLIENTE: 4, ESTRELLAS: 5, IDIOMA: 6,
   RESENA: 7, TRADUCCION: 8, INSTRUCCION: 9, RESPUESTA: 10, ENLACE: 11, ESTADO: 12,
-  AVISO: 13, PUBLICADA: 14, MODELO: 15, ID: 16,
+  AVISO: 13, PUBLICADA: 14, MODELO: 15, ID: 16, RESP_ES: 17,
 };
 const ESTADO = {
   PENDIENTE: 'Pendiente',
@@ -177,9 +177,47 @@ const ESQUEMA_RESPUESTA = {
       type: 'STRING',
       description: 'Traducción al español de la reseña si se pide; si no, vacío.',
     },
+    respuesta_es: {
+      type: 'STRING',
+      description: 'Si "respuesta" no está en español, su traducción al español para que el equipo la entienda; si ya está en español, vacío.',
+    },
   },
-  required: ['respuesta', 'aviso', 'traduccion'],
+  required: ['respuesta', 'aviso', 'traduccion', 'respuesta_es'],
 };
+
+const ESQUEMA_TRADUCCION = {
+  type: 'OBJECT',
+  properties: { traduccion: { type: 'STRING', description: 'El texto traducido al español de España.' } },
+  required: ['traduccion'],
+};
+
+/**
+ * Número interno de cada ficha en Google Business Profile (el que aparece
+ * en business.google.com/n/NÚMERO/...), según el cid de su enlace de Maps.
+ * Sirve para abrir cada reseña directamente donde se responde.
+ */
+const NEGOCIO_GOOGLE = {
+  '14530670311499082814': '3803572902912039031',   // Mercader del Mar
+  '12253750210614447929': '4757988494907609327',   // Alma Beach
+  '5849406189229568440': '1280164913376555953',    // Amira Great Kebab
+  '4685547750116726756': '14970568932413650508',   // Balcón de María
+  '8957138940596620405': '861813709944121767',     // Madre Santa Pizza
+  '11933573054473555408': '988258622949546584',    // Mestiza
+  '8982377804222892924': '13031996306508447943',   // Virtus Smash Burger
+  '18063739213391216462': '6198292089282020621',   // Pecado 24H
+  '2155032086752323594': '1273142670807325147',    // Playas del Rey
+  '975611850967119471': '4263931238444707074',     // Madre Café Bar
+  '4547889845256865308': '9111890258740612259',    // Madre Pizza
+};
+
+/** Enlace para responder: en Google, el panel del negocio; si no se conoce, la reseña pública. */
+function enlaceResponder_(plataforma, id, cid, urlResena) {
+  const idResena = String(id || '').replace(/^g:/, '');
+  if (plataforma === 'Google' && NEGOCIO_GOOGLE[cid] && /^[\w-]+$/.test(idResena)) {
+    return 'https://business.google.com/n/' + NEGOCIO_GOOGLE[cid] + '/reviews/' + idResena + '?fid=' + cid;
+  }
+  return urlResena || '';
+}
 
 
 // ===================================================================== fuentes
@@ -395,13 +433,39 @@ function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
   const version = props.getProperty('VERSION');
-  if (version === '3.1') return;
-  if (version !== '3') {
+  if (version === '3.2') return;
+  if (version !== '3' && version !== '3.1') {
     pedirRecuperacion_();        // rescata las reseñas sin responder del último mes
   }
-  desactivarEjemplosMalos_();    // ejemplos respondidos en otro idioma
-  rehacerBorradoresEnOtroIdioma_();
-  props.setProperty('VERSION', '3.1');
+  if (version !== '3.1') {
+    desactivarEjemplosMalos_();  // ejemplos respondidos en otro idioma
+    rehacerBorradoresEnOtroIdioma_();
+  }
+  prepararHojaRespuestas_();     // columna "Respuesta en español"
+  actualizarEnlacesResponder_();
+  props.setProperty('VERSION', '3.2');
+}
+
+/** Cambia los enlaces de las reseñas de Google abiertas por el de responder. */
+function actualizarEnlacesResponder_() {
+  conBloqueo_(() => {
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    const ultima = hoja.getLastRow();
+    if (ultima < 2) return;
+    const restaurantes = leerRestaurantes_();
+    const filas = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
+    const enlaces = hoja.getRange(2, COL.ENLACE, ultima - 1, 1).getRichTextValues();
+    let cambios = 0;
+    const nuevos = filas.map((f, i) => {
+      const actual = (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '';
+      const rest = buscarRestaurantePorNombre_(restaurantes, f[COL.RESTAURANTE - 1]);
+      const url = enlaceResponder_(f[COL.PLATAFORMA - 1], f[COL.ID - 1], rest && rest.cid, actual);
+      if (url === actual) return [enlaces[i][0] || SpreadsheetApp.newRichTextValue().setText('').build()];
+      cambios++;
+      return [SpreadsheetApp.newRichTextValue().setText('Responder ↗').setLinkUrl(url).build()];
+    });
+    if (cambios) hoja.getRange(2, COL.ENLACE, ultima - 1, 1).setRichTextValues(nuevos);
+  });
 }
 
 /** Vacía los borradores pendientes que están en otro idioma que la reseña para que se redacten de nuevo. */
@@ -534,6 +598,7 @@ function procesarLectura_(clave, items) {
   resenas.forEach(r => {
     const rest = asociarRestaurante_(restaurantes, r);
     r.restaurante = rest ? rest.nombre : (r.nombreFicha || 'Desconocido');
+    r.url = enlaceResponder_(r.plataforma, r.id, (rest && rest.cid) || r.cid, r.url);
   });
 
   const hoja = hoja_(HOJA.RESPUESTAS);
@@ -561,7 +626,7 @@ function procesarLectura_(clave, items) {
     const negativa = r.estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR;
     nuevas.push([r.fecha, r.plataforma, r.restaurante, r.cliente, r.estrellas, r.idioma,
       r.texto, r.traduccion, '', '', r.url, negativa ? ESTADO.MANO : ESTADO.PENDIENTE,
-      '', '', '', r.id]);
+      '', '', '', r.id, '']);
     if (negativa) negativas.push(r);
   });
 
@@ -651,9 +716,40 @@ function generarPendientes_(inicio) {
       Utilities.sleep(geminiPago_() ? 1500 : CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
     }
     comprobarAtasco_(Math.max(0, pendientes.length - hechos));
+
+    // Respuestas en otro idioma sin su versión en español (p. ej., de antes de existir la columna).
+    const porTraducir = cargarContexto_().filas.filter(f => ESTADOS_ABIERTOS.indexOf(f[COL.ESTADO - 1]) >= 0 &&
+      f[COL.RESPUESTA - 1] && !f[COL.RESP_ES - 1] && !enEspanol_(f[COL.RESPUESTA - 1]));
+    for (const fila of porTraducir) {
+      if (hechos >= CONFIG.MAX_BORRADORES_POR_EJECUCION || Date.now() - inicio > CONFIG.TIEMPO_MAXIMO_MS) break;
+      let es;
+      try {
+        es = traducirAlEspanol_(fila[COL.RESPUESTA - 1]);
+      } catch (e) {
+        if (e.limite || e.tipo === 'clave') break;
+        es = '(no se pudo traducir)';
+      }
+      conBloqueo_(() => {
+        const h = hoja_(HOJA.RESPUESTAS);
+        const n = filaPorId_(h, fila[COL.ID - 1]);
+        // Solo si el borrador sigue siendo el mismo que se tradujo.
+        if (n && h.getRange(n, COL.RESPUESTA).getValue() === fila[COL.RESPUESTA - 1]) h.getRange(n, COL.RESP_ES).setValue(es);
+      });
+      hechos++;
+      Utilities.sleep(geminiPago_() ? 1500 : CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
+    }
   } finally {
     props.deleteProperty('GENERANDO_HASTA');
   }
+}
+
+function traducirAlEspanol_(texto) {
+  return String(llamarIA_('Traduce al español de España el texto que te paso, con naturalidad. ' +
+    'Devuelve solo la traducción.', String(texto), CONFIG.MODELO_PARA_RESENAS_CORTAS, ESQUEMA_TRADUCCION).traduccion || '').trim();
+}
+
+function enEspanol_(texto) {
+  return idiomaProbable_(texto) === 'es';
 }
 
 /** Avisa si hay reseñas esperando y la IA lleva horas sin redactar nada. */
@@ -708,6 +804,7 @@ function guardarRedaccion_(id, salida, instruccion) {
     hoja.getRange(n, COL.RESPUESTA).setValue(salida.respuesta).clearNote();
     hoja.getRange(n, COL.AVISO).setValue(salida.aviso || '');
     hoja.getRange(n, COL.MODELO).setValue(salida.modelo);
+    hoja.getRange(n, COL.RESP_ES).setValue(enEspanol_(salida.respuesta) ? '' : salida.respuesta_es || '');
     if (instruccion) hoja.getRange(n, COL.INSTRUCCION).setValue(instruccion);
     if (salida.traduccion && !v[COL.TRADUCCION - 1]) hoja.getRange(n, COL.TRADUCCION).setValue(salida.traduccion);
     const estado = v[COL.ESTADO - 1];
@@ -905,7 +1002,7 @@ function llamarModelo_(modelo, sistema, usuario, esquema) {
   const partes = (((datos.candidates || [])[0] || {}).content || {}).parts || [];
   const texto = partes.filter(x => !x.thought).map(x => x.text || '').join('').trim();
   if (!texto) throw fallo('vacio');
-  if (!json) return { respuesta: limpiarRespuesta_(texto), aviso: '', traduccion: '' };
+  if (!json) return { respuesta: limpiarRespuesta_(texto), aviso: '', traduccion: '', respuesta_es: '' };
   let obj;
   try {
     obj = JSON.parse(texto.replace(/^```(?:json)?\s*|\s*```$/g, ''));
@@ -918,6 +1015,7 @@ function llamarModelo_(modelo, sistema, usuario, esquema) {
     respuesta: limpiarRespuesta_(obj.respuesta),
     aviso: String(obj.aviso || '').trim(),
     traduccion: String(obj.traduccion || '').trim(),
+    respuesta_es: String(obj.respuesta_es || '').trim(),
   };
 }
 
@@ -1080,6 +1178,7 @@ function colaDatos() {
       url: url,
       estado: f[COL.ESTADO - 1],
       aviso: f[COL.AVISO - 1],
+      respuestaEs: f[COL.RESP_ES - 1],
     }));
   // Como texto JSON: si alguna celda es una fecha u otro tipo raro, google.script.run devolvería null.
   return JSON.stringify({ resenas: resenas, hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
@@ -1090,7 +1189,8 @@ function colaAccion(id, accion, datos) {
   datos = datos || {};
   if (accion === 'regenerar') {
     const s = regenerarPorId_(id, datos.instruccion || '');
-    return { respuesta: s.respuesta, aviso: s.aviso, traduccion: s.traduccion };
+    return { respuesta: s.respuesta, aviso: s.aviso, traduccion: s.traduccion,
+      respuestaEs: enEspanol_(s.respuesta) ? '' : s.respuesta_es || '' };
   }
   return conBloqueo_(() => {
     const hoja = hoja_(HOJA.RESPUESTAS);
@@ -1123,7 +1223,7 @@ function avisarNegativas_(lista) {
   const filas = lista.map(r =>
     '<li><b>' + esc_(r.restaurante) + '</b> · ' + r.plataforma + ' · ' + r.estrellas + '★ · ' +
     esc_(r.cliente) + '<br><i>' + esc_(recortar_(r.texto || '(sin texto)', 300)) + '</i>' +
-    (r.url ? '<br><a href="' + esc_(r.url) + '">Abrir la reseña</a>' : '') + '</li>').join('');
+    (r.url ? '<br><a href="' + esc_(r.url) + '">Responder ↗</a>' : '') + '</li>').join('');
   enviarCorreo_('⚠ ' + lista.length + (lista.length === 1 ? ' reseña negativa nueva' : ' reseñas negativas nuevas'),
     (CONFIG.BORRADOR_NEGATIVAS
       ? '<p>En unos minutos tendréis un borrador en la cola, pestaña "Negativas". Leedlo con calma antes ' +
@@ -1409,7 +1509,7 @@ function prepararHojaRespuestas_() {
   hoja.getRange(1, 1, 1, CABECERA.length).setValues([CABECERA])
     .setFontWeight('bold').setBackground('#1f3a5f').setFontColor('#ffffff');
   hoja.setFrozenRows(1);
-  [110, 90, 150, 140, 40, 55, 320, 260, 170, 380, 70, 130, 220, 280, 120, 60]
+  [110, 90, 150, 140, 40, 55, 320, 260, 170, 380, 70, 130, 220, 280, 120, 60, 320]
     .forEach((a, i) => hoja.setColumnWidth(i + 1, a));
   hoja.hideColumns(COL.MODELO, 2);
 
@@ -1417,6 +1517,7 @@ function prepararHojaRespuestas_() {
   hoja.getRange(2, COL.FECHA, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
   hoja.getRange(2, COL.RESENA, filas, 4).setWrap(true);
   hoja.getRange(2, COL.AVISO, filas, 2).setWrap(true);
+  hoja.getRange(2, COL.RESP_ES, filas, 1).setWrap(true);
   hoja.getRange(2, 1, filas, CABECERA.length).setVerticalAlignment('top');
   hoja.getRange(2, COL.ESTADO, filas, 1).setDataValidation(
     SpreadsheetApp.newDataValidation()
@@ -1530,7 +1631,7 @@ function anadirFilas_(hoja, filas) {
   hoja.getRange(inicio, 1, filas.length, CABECERA.length).setValues(filas);
   hoja.getRange(inicio, COL.ENLACE, filas.length, 1).setRichTextValues(filas.map(f => [
     f[COL.ENLACE - 1]
-      ? SpreadsheetApp.newRichTextValue().setText('Abrir ↗').setLinkUrl(f[COL.ENLACE - 1]).build()
+      ? SpreadsheetApp.newRichTextValue().setText('Responder ↗').setLinkUrl(f[COL.ENLACE - 1]).build()
       : SpreadsheetApp.newRichTextValue().setText('').build()]));
   hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length)
     .sort({ column: COL.FECHA, ascending: false });
