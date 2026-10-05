@@ -1,99 +1,131 @@
 /**
- * Unicum Group — Hoja de borradores de respuesta a reseñas de Google.
+ * Unicum Group — Respuestas a reseñas de Google y TripAdvisor (versión 2).
  *
- * Qué hace (solo, cada media hora, en los servidores de Google):
- *   1. Cada hora lee las reseñas nuevas de cada restaurante en Google Maps
- *      (con el lector público de Apify; no toca la cuenta del negocio).
- *   2. Apunta en la pestaña "Respuestas" las reseñas nuevas sin contestar.
- *   3. Redacta con Gemini un borrador para las de 4-5★, con el prompt de la
- *      casa. Las de 1-3★ quedan marcadas "A mano (negativa)", sin borrador.
- *   4. Cuando detecta que una reseña ya tiene respuesta publicada en
- *      Google, la marca como "Publicada ✔".
+ * Funciona solo, cada media hora, en los servidores de Google:
+ *   1. Lee las reseñas nuevas de cada restaurante (Google Maps cada hora,
+ *      TripAdvisor cada 12 h) con los lectores públicos de Apify. No toca
+ *      las cuentas del negocio.
+ *   2. Las apunta en la pestaña "Respuestas" y redacta un borrador para las
+ *      de 4-5★ con el estilo de la casa, aprendiendo de respuestas reales
+ *      del equipo (pestaña "Ejemplos") y sin repetir aperturas recientes.
+ *      Las de 1-3★ quedan "A mano (negativa)" y se avisa por correo.
+ *   3. Si una reseña positiva menciona un problema, la marca "Revisar ⚠".
+ *   4. Cuando detecta la respuesta publicada, marca "Publicada ✔". Si el
+ *      equipo la cambió respecto al borrador, guarda la versión final
+ *      como ejemplo: el sistema aprende de vuestras correcciones.
  *
- * Publicar sigue siendo manual: copiar la respuesta, pulsar "Abrir ↗" y
- * pegarla en Google. Ver GUIA.md para la instalación.
+ * Publicar sigue siendo manual, idealmente desde la cola del móvil
+ * (archivo Cola.html, se publica como aplicación web). Ver GUIA.md.
  *
- * Claves necesarias (Configuración del proyecto → Propiedades de la
- * secuencia de comandos): APIFY_TOKEN y GEMINI_API_KEY.
+ * Claves (Configuración del proyecto → Propiedades de la secuencia de
+ * comandos): APIFY_TOKEN y GEMINI_API_KEY.
  */
 
 const CONFIG = {
-  APIFY_ACTOR: 'compass~google-maps-reviews-scraper',
-  // Alias que siempre apunta al modelo Flash vigente (capa gratuita).
-  GEMINI_MODEL: 'gemini-flash-latest',
-  // Cada cuántas horas se leen las reseñas en Google Maps. Cada lectura
-  // pide solo las reseñas publicadas desde la anterior, y Apify cobra
-  // por reseña leída: leer a menudo apenas encarece.
-  HORAS_ENTRE_LECTURAS: 1,
-  // Tope de reseñas por restaurante en cada lectura (seguridad de coste).
-  RESENAS_POR_RESTAURANTE: 100,
-  // Reseñas más antiguas que esto no se apuntan. Con 7 días la primera
-  // lectura cabe en los límites gratuitos; subidlo después si queréis
-  // recuperar reseñas antiguas sin contestar.
-  DIAS_MAXIMOS: 7,
-  // Por debajo de estas estrellas no se redacta borrador.
+  // --- Lectura de reseñas (Apify) ---
+  HORAS_ENTRE_LECTURAS: 1,               // Google Maps: reseñas nuevas
+  HORAS_ENTRE_LECTURAS_TRIPADVISOR: 12,
+  // Repaso diario de los últimos días: recoge reseñas que Google muestra
+  // con retraso y detecta las respuestas ya publicadas.
+  DIAS_REPASO: 3,
+  RESENAS_POR_RESTAURANTE: 100,          // tope por local y lectura
+  DIAS_MAXIMOS: 7,                       // reseñas más antiguas no se apuntan
+  // Gasto mensual de Apify (de 5 $ gratis) a partir del cual solo se hace
+  // el repaso diario.
+  APIFY_PRESUPUESTO_USD: 4.5,
+
+  // --- Redacción (Gemini API, capa gratuita) ---
+  // Se prueba en este orden; si uno agota su cupo diario, se pasa al
+  // siguiente. Flash redacta mejor pero da pocas peticiones gratis al día.
+  MODELOS: ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemma-4-31b-it'],
+  // Las reseñas sin texto o muy cortas empiezan en este modelo (posición
+  // en MODELOS, desde 0) para reservar el cupo del mejor a las largas.
+  MODELO_PARA_RESENAS_CORTAS: 1,
+  LONGITUD_RESENA_CORTA: 40,
+  EJEMPLOS_EN_PROMPT: 3,
+  APERTURAS_A_EVITAR: 6,
   MIN_ESTRELLAS_BORRADOR: 4,
   MAX_BORRADORES_POR_EJECUCION: 25,
-  // Pausa entre llamadas a Gemini para respetar el límite gratuito.
-  PAUSA_ENTRE_LLAMADAS_MS: 7000,
-  // Apps Script corta a los 6 minutos; paramos antes por seguridad.
+  PAUSA_ENTRE_LLAMADAS_MS: 6000,
   TIEMPO_MAXIMO_MS: 5 * 60 * 1000,
+
+  // --- Avisos por correo ---
+  EMAIL_AVISOS: '',                      // vacío = el de la cuenta dueña; varios, separados por comas
+  AVISAR_NEGATIVAS: true,
+  RESUMEN_DIARIO_HORA: 10,               // hora de Madrid; 0 = sin resumen
 };
 
-const HOJA_RESPUESTAS = 'Respuestas';
-const HOJA_RESTAURANTES = 'Restaurantes';
+const ZONA = 'Europe/Madrid';
+const MIN = 60 * 1000;
+const HORA = 60 * MIN;
+const DIA = 24 * HORA;
 
-const CABECERA = ['Fecha', 'Restaurante', 'Cliente', '★', 'Idioma',
-  'Reseña (original)', 'Traducción', 'Instrucción (->)',
-  'Respuesta propuesta', 'Responder', 'Estado', 'ID'];
+const HOJA = {
+  RESPUESTAS: 'Respuestas',
+  RESTAURANTES: 'Restaurantes',
+  EJEMPLOS: 'Ejemplos',
+  PROMPT: 'Prompt',
+};
+
+const CABECERA = ['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Idioma',
+  'Reseña (original)', 'Traducción', 'Instrucción (->)', 'Respuesta propuesta',
+  'Responder', 'Estado', 'Aviso IA', 'Respuesta publicada', 'Modelo', 'ID'];
 const COL = {
-  FECHA: 1, RESTAURANTE: 2, CLIENTE: 3, ESTRELLAS: 4, IDIOMA: 5, RESENA: 6,
-  TRADUCCION: 7, INSTRUCCION: 8, RESPUESTA: 9, ENLACE: 10, ESTADO: 11, ID: 12,
+  FECHA: 1, PLATAFORMA: 2, RESTAURANTE: 3, CLIENTE: 4, ESTRELLAS: 5, IDIOMA: 6,
+  RESENA: 7, TRADUCCION: 8, INSTRUCCION: 9, RESPUESTA: 10, ENLACE: 11, ESTADO: 12,
+  AVISO: 13, PUBLICADA: 14, MODELO: 15, ID: 16,
 };
 const ESTADO = {
   PENDIENTE: 'Pendiente',
-  PUBLICADA: 'Publicada ✔',
+  REVISAR: 'Revisar ⚠',
   MANO: 'A mano (negativa)',
+  PUBLICADA: 'Publicada ✔',
   DESCARTADA: 'Descartada',
   ERROR: 'Error IA (regenerar)',
 };
+const ESTADOS_ABIERTOS = [ESTADO.PENDIENTE, ESTADO.REVISAR, ESTADO.MANO, ESTADO.ERROR];
 
-const CABECERA_RESTAURANTES = ['Activo', 'Nombre en Google (coincide con)',
-  'Ciudad', 'Enlace Google Maps', 'Keywords SEO', 'Notas'];
+const CABECERA_RESTAURANTES = ['Activo', 'Nombre en Google (coincide con)', 'Ciudad',
+  'Enlace Google Maps', 'Enlace TripAdvisor', 'Keywords SEO', 'Notas'];
+const CR = { ACTIVO: 1, NOMBRE: 2, CIUDAD: 3, GOOGLE: 4, TRIPADVISOR: 5, KEYWORDS: 6, NOTAS: 7 };
 
-// Enlaces construidos con el identificador de ficha (cid) que aparece en
-// los correos de aviso de Google. Comprobad que cada uno abre el
-// restaurante correcto; si no, pegad el enlace copiado de Google Maps.
+const CABECERA_EJEMPLOS = ['Usar', 'Restaurante', 'Idioma', '★', 'Reseña', 'Respuesta', 'Origen', 'ID'];
+const CE = { USAR: 1, RESTAURANTE: 2, IDIOMA: 3, ESTRELLAS: 4, RESENA: 5, RESPUESTA: 6, ORIGEN: 7, ID: 8 };
+const ORIGEN = { HISTORICO: 'Respuesta anterior', CORREGIDA: 'Corregida por el equipo' };
+const MAX_HISTORICOS_POR_LOCAL = 25;
+
+// Enlaces de Google Maps construidos con el identificador de ficha (cid)
+// de los correos de aviso de Google. Los de TripAdvisor se pegan a mano.
 const RESTAURANTES_INICIALES = [
-  ['Sí', 'Mercader del Mar', 'Santa Ponsa', 'https://maps.google.com/?cid=14530670311499082814',
+  ['Sí', 'Mercader del Mar', 'Santa Ponsa', 'https://maps.google.com/?cid=14530670311499082814', '',
     'restaurante mediterráneo, paellas, mariscos frescos, pescados, terraza con vistas al mar, vinos y cava, menú para niños, ambiente familiar, celebraciones y eventos, abierto todo el año', ''],
-  ['Sí', 'Alma Beach', 'Santa Ponsa', 'https://maps.google.com/?cid=12253750210614447929',
+  ['Sí', 'Alma Beach', 'Santa Ponsa', 'https://maps.google.com/?cid=12253750210614447929', '',
     'steakhouse, beach bar, cócteles, terraza al aire libre, paellas, pizzas artesanales, cocina mediterránea, abierto todo el año', ''],
-  ['Sí', 'Amira Great Kebab', 'Santa Ponsa', 'https://maps.google.com/?cid=5849406189229568440',
+  ['Sí', 'Amira Great Kebab', 'Santa Ponsa', 'https://maps.google.com/?cid=5849406189229568440', '',
     'kebab gourmet, dürum, pizza, wok oriental, poké bowl, helados y copas heladas, take away, reparto a domicilio en Calvià, abierto 24 horas, abierto todo el año',
     'Abierto 24 horas. Agradecer también los pedidos take away / a domicilio.'],
-  ['Sí', 'Balcón de María', 'Santa Ponsa', 'https://maps.google.com/?cid=4685547750116726756',
+  ['Sí', 'Balcón de María', 'Santa Ponsa', 'https://maps.google.com/?cid=4685547750116726756', '',
     'pinchos y tapas, terraza con vistas al mar, menú infantil, parque infantil, ambiente familiar, cocina mediterránea, cena romántica, abierto todo el año', ''],
-  ['Sí', 'Madre Santa Pizza', 'Santa Ponsa', 'https://maps.google.com/?cid=8957138940596620405',
+  ['Sí', 'Madre Santa Pizza', 'Santa Ponsa', 'https://maps.google.com/?cid=8957138940596620405', '',
     'restaurante italiano, pizza napolitana, pasta fresca, tiramisú casero, cócteles, terraza con vistas al mar, ambiente familiar, cocina tradicional italiana, abierto todo el año', ''],
-  ['Sí', 'Mestiza', 'Santa Ponsa', 'https://maps.google.com/?cid=11933573054473555408',
+  ['Sí', 'Mestiza', 'Santa Ponsa', 'https://maps.google.com/?cid=11933573054473555408', '',
     'steak house, prime steak, great burger, pizza fina, cócteles, terraza al aire libre, sports bar', ''],
-  ['Sí', 'Virtus Smash Burger', 'Santa Ponsa', 'https://maps.google.com/?cid=8982377804222892924',
+  ['Sí', 'Virtus Smash Burger', 'Santa Ponsa', 'https://maps.google.com/?cid=8982377804222892924', '',
     'smash burgers, sports bar, desayunos y bocadillos, cócteles y cerveza, terraza al aire libre, comida rápida de calidad, abierto 24 horas, abierto todo el año',
     'Abierto 24 horas.'],
-  ['Sí', 'Pecado 24H', 'Santa Ponsa', 'https://maps.google.com/?cid=18063739213391216462',
+  ['Sí', 'Pecado 24H', 'Santa Ponsa', 'https://maps.google.com/?cid=18063739213391216462', '',
     'delivery 24 horas, take away',
     'Es delivery/take away: agradecer también los pedidos a domicilio.'],
-  ['Sí', 'Playas del Rey', 'Santa Ponsa', 'https://maps.google.com/?cid=2155032086752323594',
+  ['Sí', 'Playas del Rey', 'Santa Ponsa', 'https://maps.google.com/?cid=2155032086752323594', '',
     'hotel en Santa Ponsa, buena ubicación, cerca de la playa, hotel céntrico, desayuno incluido, piscina',
     'Es un HOTEL, no un restaurante: responder como el equipo del hotel. Su bar es N76 (Sports Pool Bar: smash burger, thin pizza, baguettes y sandwiches, cócteles y cerveza, ambiente relajado junto a la piscina); si la reseña habla de la comida o del bar, se puede mencionar N76 con naturalidad.'],
-  ['Sí', 'Madre Café Bar', 'Palma de Mallorca', 'https://maps.google.com/?cid=975611850967119471',
+  ['Sí', 'Madre Café Bar', 'Palma de Mallorca', 'https://maps.google.com/?cid=975611850967119471', '',
     'tapas, pinchos, arroces y paellas, menú diario, desayunos, Plaza Patines, parque infantil, ambiente familiar, abierto todo el año', ''],
-  ['Sí', 'Madre Pizza', 'Palma de Mallorca', 'https://maps.google.com/?cid=4547889845256865308',
+  ['Sí', 'Madre Pizza', 'Palma de Mallorca', 'https://maps.google.com/?cid=4547889845256865308', '',
     'restaurante italiano, pizza napolitana, pasta casera, tiramisú, cocina italiana tradicional, Plaza Patines, abierto todo el año', ''],
 ];
 
-const SYSTEM_PROMPT = `Eres la persona del equipo de Unicum Group (Mallorca) que responde las reseñas de Google y TripAdvisor de sus restaurantes en Santa Ponsa y Palma.
+const PROMPT_POR_DEFECTO = `Eres la persona del equipo de Unicum Group (Mallorca) que responde las reseñas de Google y TripAdvisor de sus restaurantes en Santa Ponsa y Palma.
 
 Lineamientos obligatorios:
 - Tono cercano, cálido e informal: una conversación humana, nunca corporativa.
@@ -113,18 +145,114 @@ Para reseñas positivas, cuando la extensión lo permita:
 - Invita a volver.
 - Emojis con moderación (🌟✨🌅🍴) y solo si encajan con el tono del comentario; en reseñas sobrias, ninguno.
 
-Si tras el texto de la reseña aparece una línea que empieza por "->", es una directiva interna del equipo y debe cumplirse de forma prioritaria.
+Si aparece una línea que empieza por "->", es una directiva interna del equipo y debe cumplirse de forma prioritaria.
 
-Devuelve ÚNICAMENTE el texto de la respuesta, sin comillas, sin explicaciones y sin firma (la plataforma ya muestra el nombre del restaurante).`;
+La respuesta debe ser solo el texto a publicar: sin comillas, sin explicaciones y sin firma (la plataforma ya muestra el nombre del restaurante).`;
+
+const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA. Redacta un BORRADOR para que el equipo lo revise antes de publicarlo: agradece la opinión, lamenta lo ocurrido sin excusas ni discusiones, no inventes hechos ni prometas compensaciones (salvo que la directiva "->" lo indique), apóyate en lo que explique la directiva sobre lo sucedido e invita a contactar en privado. Tono humano y sereno; sin emojis.';
+
+const ESQUEMA_RESPUESTA = {
+  type: 'OBJECT',
+  properties: {
+    respuesta: { type: 'STRING', description: 'Solo el texto a publicar.' },
+    aviso: {
+      type: 'STRING',
+      description: 'En español y en una frase: si la reseña, aunque sea positiva, menciona un problema que el equipo debería revisar (servicio, espera, cobro, limpieza, alergias, trato). Vacío si no hay nada.',
+    },
+    traduccion: {
+      type: 'STRING',
+      description: 'Traducción al español de la reseña si se pide; si no, vacío.',
+    },
+  },
+  required: ['respuesta', 'aviso', 'traduccion'],
+};
 
 
-// ---------------------------------------------------------------- menú
+// ===================================================================== fuentes
+
+const FUENTES = {
+  google: {
+    plataforma: 'Google',
+    actor: 'compass~google-maps-reviews-scraper',
+    campoUrl: 'google',
+    horas: () => CONFIG.HORAS_ENTRE_LECTURAS,
+    repasoDiario: true,
+    entrada: (urls, tipo, desde) => {
+      const e = {
+        startUrls: urls.map(u => ({ url: u })),
+        maxReviews: tipo === 'estilo' ? 60 : CONFIG.RESENAS_POR_RESTAURANTE,
+        reviewsSort: 'newest', // obligatorio para usar reviewsStartDate
+        language: 'es',
+        personalData: true,
+      };
+      if (tipo !== 'estilo') {
+        e.reviewsStartDate = Math.max(1, Math.ceil((Date.now() - desde) / HORA)) + ' hours';
+      }
+      return e;
+    },
+    normalizar: it => ({
+      id: 'g:' + (it.reviewId || it.reviewUrl || ''),
+      plataforma: 'Google',
+      nombreFicha: it.title || it.placeName || '',
+      cid: String(it.cid || ''),
+      cliente: it.name || it.reviewerName || 'Cliente',
+      estrellas: Number(it.stars || it.rating || 0),
+      idioma: it.originalLanguage || '',
+      texto: it.text || '',
+      traduccion: it.originalLanguage && it.originalLanguage !== 'es' ? (it.textTranslated || '') : '',
+      url: it.reviewUrl || it.url || '',
+      fecha: fecha_(it.publishedAtDate || it.publishedAt),
+      respuestaPropietario: it.responseFromOwnerText || it.ownerResponseText || '',
+    }),
+  },
+  tripadvisor: {
+    plataforma: 'TripAdvisor',
+    actor: 'maxcopell~tripadvisor-reviews',
+    campoUrl: 'tripadvisor',
+    horas: () => CONFIG.HORAS_ENTRE_LECTURAS_TRIPADVISOR,
+    repasoDiario: false, // cada lectura ya cubre los últimos días
+    entrada: (urls, tipo, desde) => {
+      const e = {
+        startUrls: urls.map(u => ({ url: u })),
+        maxItemsPerQuery: tipo === 'estilo' ? 40 : CONFIG.RESENAS_POR_RESTAURANTE,
+      };
+      if (tipo !== 'estilo') {
+        e.lastReviewDate = Utilities.formatDate(
+          new Date(Math.min(desde, Date.now() - CONFIG.DIAS_REPASO * DIA)), ZONA, 'yyyy-MM-dd');
+      }
+      return e;
+    },
+    normalizar: it => {
+      const respuesta = it.ownerResponse;
+      return {
+        id: 't:' + (it.id || it.url || ''),
+        plataforma: 'TripAdvisor',
+        nombreFicha: (it.placeInfo && it.placeInfo.name) || '',
+        cid: '',
+        cliente: (it.user && (it.user.name || it.user.username)) || 'Cliente',
+        estrellas: Number(it.rating || 0),
+        idioma: it.lang || '',
+        texto: [it.title, it.text].filter(Boolean).join('\n'),
+        traduccion: '',
+        url: it.url || '',
+        fecha: fecha_(it.publishedDate),
+        respuestaPropietario: respuesta ? (typeof respuesta === 'string' ? respuesta : respuesta.text || '') : '',
+      };
+    },
+  },
+};
+
+
+// ======================================================================== menú
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Reseñas')
     .addItem('▶ Buscar reseñas nuevas ahora', 'ciclo')
     .addItem('↻ Regenerar respuesta de la fila seleccionada', 'regenerarFilaSeleccionada')
+    .addItem('📱 Abrir la cola de respuestas', 'mostrarEnlaceCola')
     .addSeparator()
+    .addItem('🎓 Aprender de respuestas antiguas', 'pedirEjemplos')
+    .addItem('💶 Ver gasto de Apify', 'mostrarGastoApify')
     .addItem('⚙ Instalar / reparar', 'instalar')
     .addToUi();
 }
@@ -140,246 +268,657 @@ function instalar() {
   }
   prepararHojaRespuestas_();
   prepararHojaRestaurantes_();
+  const primeraVez = prepararHojaEjemplos_();
+  prepararHojaPrompt_();
 
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'ciclo')
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('ciclo').timeBased().everyMinutes(30).create();
 
+  if (primeraVez) pedirEjemplos_();
+
   ui.alert('Listo. La hoja se actualizará sola cada media hora.\n\n' +
     'Ahora pulsa Reseñas → "Buscar reseñas nuevas ahora". La primera lectura ' +
-    'de Google Maps tarda unos minutos: vuelve a pulsarlo pasados 5-10 minutos ' +
-    'para ver los borradores (o espera a la siguiente hora).');
+    'tarda unos minutos y además aprende de vuestras respuestas antiguas: ' +
+    'vuelve a pulsarlo pasados 5-10 minutos (o espera a la siguiente media hora).');
+}
+
+function pedirEjemplos() {
+  pedirEjemplos_();
+  SpreadsheetApp.getUi().alert('En la próxima vuelta (como mucho media hora, o pulsando "Buscar ' +
+    'reseñas nuevas ahora") se leerán vuestras respuestas antiguas y se guardarán en la ' +
+    'pestaña "Ejemplos". Podéis desactivar con "No" las que no os gusten.');
+}
+
+function pedirEjemplos_() {
+  const props = PropertiesService.getScriptProperties();
+  Object.keys(FUENTES).forEach(c => props.setProperty('ESTILO_PEDIDO_' + c, '1'));
+}
+
+function mostrarGastoApify() {
+  const gasto = gastoApify_(true);
+  SpreadsheetApp.getUi().alert(gasto === null
+    ? 'No se pudo consultar el gasto de Apify. Revísalo en console.apify.com → Billing.'
+    : 'Gasto de Apify este mes: ' + gasto.toFixed(2) + ' $ de 5 $ gratuitos.');
+}
+
+function mostrarEnlaceCola() {
+  const url = ScriptApp.getService().getUrl();
+  const ui = SpreadsheetApp.getUi();
+  if (!url) {
+    ui.alert('La cola todavía no está publicada. Sigue el paso "Cola en el móvil" de la guía ' +
+      '(Implementar → Nueva implementación → Aplicación web).');
+    return;
+  }
+  ui.showModalDialog(HtmlService.createHtmlOutput(
+    '<p style="font-family:sans-serif">Abre este enlace en el móvil (con la cuenta de la hoja) ' +
+    'y guárdalo en la pantalla de inicio:</p><p style="font-family:sans-serif;word-break:break-all">' +
+    '<a href="' + url + '" target="_blank">' + url + '</a></p>').setWidth(460).setHeight(170),
+    'Cola de respuestas');
 }
 
 
-// ---------------------------------------------------------------- ciclo
+// ======================================================================= ciclo
 
 function ciclo() {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(1000)) return; // ya hay una ejecución en marcha
-  const inicio = Date.now();
-  try {
-    incorporarUltimaLectura_();
-    lanzarLecturaSiToca_();
-    generarPendientes_(inicio);
-  } finally {
-    lock.releaseLock();
-  }
+  Object.keys(FUENTES).forEach(clave => {
+    try {
+      comprobarLectura_(clave);
+      lanzarLecturaSiToca_(clave);
+    } catch (e) {
+      avisarError_('fuente_' + clave, 'Fallo leyendo ' + FUENTES[clave].plataforma + ': ' + (e.message || e));
+    }
+  });
+  generarPendientes_();
+  enviarResumenSiToca_();
 }
 
-/** Pasa a la hoja las reseñas de la última lectura de Apify terminada. */
-function incorporarUltimaLectura_() {
-  const ultima = apify_('GET', 'acts/' + CONFIG.APIFY_ACTOR + '/runs/last?status=SUCCEEDED');
-  if (!ultima || !ultima.data) return;
+/** Si la lectura lanzada antes ha terminado, pasa sus reseñas a la hoja. */
+function comprobarLectura_(clave) {
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('ULTIMA_LECTURA_INCORPORADA') === ultima.data.id) return;
+  const lectura = JSON.parse(props.getProperty('LECTURA_' + clave) || 'null');
+  if (!lectura) return;
+  const run = apify_('GET', 'actor-runs/' + lectura.id);
+  const estado = run && run.data ? run.data.status : 'DESCONOCIDO';
+  if (['READY', 'RUNNING', 'TIMING-OUT', 'ABORTING'].indexOf(estado) >= 0) {
+    if (Date.now() - lectura.inicio < 3 * HORA) return;
+    // Colgada: se cancela para que no siga gastando y se lanzará otra.
+    try { apify_('POST', 'actor-runs/' + lectura.id + '/abort'); } catch (e) { /* mejor esfuerzo */ }
+    props.deleteProperty('LECTURA_' + clave);
+    avisarError_('lectura_' + clave, 'Una lectura de ' + FUENTES[clave].plataforma +
+      ' llevaba más de 3 horas sin terminar y se ha cancelado. Se lanzará otra sola.');
+    return;
+  }
+  props.deleteProperty('LECTURA_' + clave);
+  if (estado !== 'SUCCEEDED') {
+    avisarError_('lectura_' + clave, 'La lectura de ' + FUENTES[clave].plataforma +
+      ' terminó con estado ' + estado + '. Se reintentará sola.');
+    return;
+  }
+  const items = apify_('GET', 'datasets/' + run.data.defaultDatasetId + '/items?clean=true&format=json') || [];
+  conBloqueo_(() => procesarLectura_(clave, items));
+  props.setProperty('OK_' + clave, String(lectura.inicio));
+}
 
-  const items = apify_('GET', 'datasets/' + ultima.data.defaultDatasetId + '/items?clean=true&format=json') || [];
-  const hoja = hoja_(HOJA_RESPUESTAS);
+/** Lanza la siguiente lectura en Apify cuando toca. */
+function lanzarLecturaSiToca_(clave) {
+  const f = FUENTES[clave];
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('LECTURA_' + clave)) return; // ya hay una en marcha
+  const urls = leerRestaurantes_().filter(r => r.activo && r[f.campoUrl]).map(r => r[f.campoUrl]);
+  if (!urls.length) return;
+
+  const ahora = Date.now();
+  const desdeUltima = t => ahora - Number(props.getProperty('ULTIMA_' + t + '_' + clave) || 0);
+  let tipo = null;
+  if (props.getProperty('ESTILO_PEDIDO_' + clave)) tipo = 'estilo';
+  else if (f.repasoDiario && desdeUltima('repaso') >= 20 * HORA) tipo = 'repaso';
+  else if (desdeUltima('nuevas') >= f.horas() * HORA - 5 * MIN) tipo = 'nuevas';
+  if (!tipo) return;
+
+  const gasto = gastoApify_();
+  if (gasto !== null && gasto >= 5) return; // tope gratuito: Apify rechazaría la lectura
+  if (tipo === 'nuevas' && gasto !== null && gasto >= CONFIG.APIFY_PRESUPUESTO_USD) {
+    avisarError_('presupuesto', 'El gasto de Apify de este mes (' + gasto.toFixed(2) +
+      ' $) se acerca a los 5 $ gratuitos: hasta fin de mes solo se hará el repaso diario.');
+    return;
+  }
+
+  const desde = tipo === 'repaso'
+    ? ahora - CONFIG.DIAS_REPASO * DIA
+    : Number(props.getProperty('OK_' + clave)) || ahora - CONFIG.DIAS_MAXIMOS * DIA;
+  const entrada = f.entrada(urls, tipo, desde);
+  const porLocal = entrada.maxReviews || entrada.maxItemsPerQuery || CONFIG.RESENAS_POR_RESTAURANTE;
+  const run = apify_('POST', 'acts/' + f.actor + '/runs?maxItems=' + urls.length * porLocal, entrada);
+  props.setProperty('LECTURA_' + clave, JSON.stringify({ id: run.data.id, tipo: tipo, inicio: ahora }));
+  props.setProperty('ULTIMA_' + tipo + '_' + clave, String(ahora));
+  if (tipo === 'estilo') props.deleteProperty('ESTILO_PEDIDO_' + clave);
+}
+
+/** Pasa a la hoja las reseñas de una lectura y aprende de las ya respondidas. */
+function procesarLectura_(clave, items) {
   const restaurantes = leerRestaurantes_();
-  const filasPorId = indexarFilas_(hoja);
-  const limite = Date.now() - CONFIG.DIAS_MAXIMOS * 24 * 3600 * 1000;
+  const resenas = items.map(FUENTES[clave].normalizar).filter(r => r.id.length > 2);
+  resenas.forEach(r => {
+    const rest = asociarRestaurante_(restaurantes, r);
+    r.restaurante = rest ? rest.nombre : (r.nombreFicha || 'Desconocido');
+  });
+
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const indice = indexarFilas_(hoja);
+  const limite = Date.now() - CONFIG.DIAS_MAXIMOS * DIA;
   const nuevas = [];
+  const negativas = [];
+  const ejemplos = [];
+  const vistas = {};
 
-  items.forEach(it => {
-    const id = String(it.reviewId || it.reviewUrl || '');
-    if (!id) return;
-    const respondida = Boolean(it.responseFromOwnerText || it.ownerResponseText);
-    const existente = filasPorId[id];
-
-    if (existente) {
-      if (existente < 0) return; // repetida dentro de esta misma lectura
-      const estado = hoja.getRange(existente, COL.ESTADO).getValue();
-      if (respondida && (estado === ESTADO.PENDIENTE || estado === ESTADO.ERROR || estado === ESTADO.MANO)) {
-        hoja.getRange(existente, COL.ESTADO).setValue(ESTADO.PUBLICADA);
-      }
+  resenas.forEach(r => {
+    if (vistas[r.id]) return;
+    vistas[r.id] = true;
+    const fila = indice[r.id];
+    if (fila) {
+      if (r.respuestaPropietario) registrarPublicada_(hoja, fila, r.respuestaPropietario);
       return;
     }
-    if (respondida) return; // ya contestada antes de entrar en la hoja
-
-    const fecha = new Date(it.publishedAtDate || it.publishedAt || Date.now());
-    if (fecha.getTime() < limite) return;
-
-    const estrellas = Number(it.stars || it.rating || 0);
-    const idioma = it.originalLanguage || '';
-    const nombreFicha = it.title || it.placeName || '';
-    const rest = buscarRestaurante_(restaurantes, nombreFicha);
-    nuevas.push({
-      fecha: fecha,
-      valores: [
-        fecha,
-        rest ? rest.nombre : nombreFicha,
-        it.name || it.reviewerName || 'Cliente',
-        estrellas,
-        idioma,
-        it.text || '',
-        idioma && idioma !== 'es' ? (it.textTranslated || '') : '',
-        '',
-        '',
-        it.reviewUrl || '',
-        estrellas >= CONFIG.MIN_ESTRELLAS_BORRADOR ? ESTADO.PENDIENTE : ESTADO.MANO,
-        id,
-      ],
-    });
-    filasPorId[id] = -1; // evita duplicados dentro de la misma lectura
+    if (r.respuestaPropietario) {
+      // Respondida fuera del sistema: buen ejemplo del estilo del equipo.
+      if (r.estrellas >= CONFIG.MIN_ESTRELLAS_BORRADOR && r.texto) ejemplos.push(r);
+      return;
+    }
+    if (r.fecha.getTime() < limite) return;
+    const negativa = r.estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR;
+    nuevas.push([r.fecha, r.plataforma, r.restaurante, r.cliente, r.estrellas, r.idioma,
+      r.texto, r.traduccion, '', '', r.url, negativa ? ESTADO.MANO : ESTADO.PENDIENTE,
+      '', '', '', r.id]);
+    if (negativa) negativas.push(r);
   });
 
-  if (nuevas.length) {
-    // Se añaden al final (filas ya formateadas) y luego se ordena todo
-    // por fecha, con lo más reciente arriba.
-    const inicio = hoja.getLastRow() + 1;
-    const faltan = inicio + nuevas.length - 1 - hoja.getMaxRows();
-    if (faltan > 0) hoja.insertRowsAfter(hoja.getMaxRows(), faltan);
-    const filas = nuevas.map(n => n.valores);
-    hoja.getRange(inicio, 1, filas.length, CABECERA.length).setValues(filas);
-    escribirEnlaces_(hoja, inicio, filas.map(f => f[COL.ENLACE - 1]));
-    hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length)
-      .sort({ column: COL.FECHA, ascending: false });
+  if (ejemplos.length) agregarEjemplos_(ejemplos, ORIGEN.HISTORICO);
+  if (nuevas.length) anadirFilas_(hoja, nuevas);
+  if (negativas.length && CONFIG.AVISAR_NEGATIVAS) avisarNegativas_(negativas);
+}
+
+/** Marca una fila como publicada y aprende si el texto final cambió. */
+function registrarPublicada_(hoja, fila, textoPublicado) {
+  const valores = hoja.getRange(fila, 1, 1, CABECERA.length).getValues()[0];
+  if (valores[COL.ESTADO - 1] !== ESTADO.DESCARTADA) {
+    hoja.getRange(fila, COL.ESTADO).setValue(ESTADO.PUBLICADA);
   }
-  props.setProperty('ULTIMA_LECTURA_INCORPORADA', ultima.data.id);
-  // La próxima lectura pedirá las reseñas desde que empezó esta, así que
-  // una lectura fallida nunca deja huecos.
-  props.setProperty('INICIO_ULTIMA_LECTURA_OK',
-    String(Date.parse(ultima.data.startedAt) || Date.now()));
+  if (!valores[COL.PUBLICADA - 1] && textoPublicado) {
+    hoja.getRange(fila, COL.PUBLICADA).setValue(textoPublicado);
+    aprenderDeFila_(valores, textoPublicado);
+  }
 }
 
-/** Lanza una nueva lectura en Apify si ha pasado el tiempo configurado. */
-function lanzarLecturaSiToca_() {
-  const props = PropertiesService.getScriptProperties();
-  const ultimoInicio = Number(props.getProperty('ULTIMO_INICIO_LECTURA') || 0);
-  // 5 minutos de margen: los activadores de Google no son exactos al minuto.
-  if (Date.now() - ultimoInicio < CONFIG.HORAS_ENTRE_LECTURAS * 3600e3 - 5 * 60e3) return;
-
-  const enCurso = apify_('GET', 'acts/' + CONFIG.APIFY_ACTOR + '/runs/last');
-  if (enCurso && enCurso.data && ['READY', 'RUNNING'].indexOf(enCurso.data.status) >= 0) return;
-  // Si la última lectura terminó pero aún no se ha pasado a la hoja, se
-  // espera a la próxima vuelta para no pedir de nuevo las mismas reseñas.
-  if (enCurso && enCurso.data && enCurso.data.status === 'SUCCEEDED' &&
-      props.getProperty('ULTIMA_LECTURA_INCORPORADA') !== enCurso.data.id) return;
-
-  const urls = leerRestaurantes_().filter(r => r.activo && r.url).map(r => ({ url: r.url }));
-  if (!urls.length) return;
-  // Solo reseñas desde el inicio de la última lectura incorporada, con una
-  // hora de margen (las repetidas se descartan). La primera vez, los
-  // últimos DIAS_MAXIMOS días.
-  const desde = Number(props.getProperty('INICIO_ULTIMA_LECTURA_OK') || 0);
-  const horas = desde ? Math.ceil((Date.now() - desde) / 3600e3) + 1 : CONFIG.DIAS_MAXIMOS * 24;
-  const maxItems = urls.length * CONFIG.RESENAS_POR_RESTAURANTE; // tope de coste
-  apify_('POST', 'acts/' + CONFIG.APIFY_ACTOR + '/runs?maxItems=' + maxItems, {
-    startUrls: urls,
-    maxReviews: CONFIG.RESENAS_POR_RESTAURANTE,
-    reviewsSort: 'newest', // obligatorio para usar reviewsStartDate
-    reviewsStartDate: horas + ' hours',
-    language: 'es',
-    personalData: true,
-  });
-  props.setProperty('ULTIMO_INICIO_LECTURA', String(Date.now()));
+/** Si el equipo corrigió el borrador, guarda la versión final como ejemplo. */
+function aprenderDeFila_(valores, textoFinal) {
+  const borrador = String(valores[COL.RESPUESTA - 1] || '');
+  if (!borrador || !textoFinal || similitud_(borrador, textoFinal) >= 0.8) return;
+  if (Number(valores[COL.ESTRELLAS - 1]) < CONFIG.MIN_ESTRELLAS_BORRADOR) return;
+  agregarEjemplos_([{
+    id: valores[COL.ID - 1],
+    restaurante: valores[COL.RESTAURANTE - 1],
+    idioma: valores[COL.IDIOMA - 1],
+    estrellas: valores[COL.ESTRELLAS - 1],
+    texto: valores[COL.RESENA - 1],
+    respuestaPropietario: textoFinal,
+  }], ORIGEN.CORREGIDA);
 }
+
+
+// ================================================================== redacción
 
 /** Redacta los borradores que falten (filas "Pendiente" sin respuesta). */
-function generarPendientes_(inicio) {
-  const hoja = hoja_(HOJA_RESPUESTAS);
-  const ultima = hoja.getLastRow();
-  if (ultima < 2) return;
-  const datos = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
-  const restaurantes = leerRestaurantes_();
-  let hechos = 0;
-
-  for (let i = 0; i < datos.length; i++) {
-    if (hechos >= CONFIG.MAX_BORRADORES_POR_EJECUCION) break;
-    if (Date.now() - inicio > CONFIG.TIEMPO_MAXIMO_MS) break;
-    const fila = datos[i];
-    if (fila[COL.ESTADO - 1] !== ESTADO.PENDIENTE || fila[COL.RESPUESTA - 1]) continue;
-
-    try {
-      const texto = redactar_(fila, restaurantes);
-      hoja.getRange(i + 2, COL.RESPUESTA).setValue(texto);
-    } catch (e) {
-      if (e.limite) break; // límite de Gemini: seguimos en la próxima hora
-      hoja.getRange(i + 2, COL.ESTADO).setValue(ESTADO.ERROR);
-      hoja.getRange(i + 2, COL.RESPUESTA).setNote(String(e.message || e));
+function generarPendientes_() {
+  const props = PropertiesService.getScriptProperties();
+  if (Number(props.getProperty('GENERANDO_HASTA') || 0) > Date.now()) return;
+  props.setProperty('GENERANDO_HASTA', String(Date.now() + CONFIG.TIEMPO_MAXIMO_MS + MIN));
+  const inicio = Date.now();
+  try {
+    const contexto = cargarContexto_();
+    const pendientes = contexto.filas.filter(f =>
+      f[COL.ESTADO - 1] === ESTADO.PENDIENTE && !f[COL.RESPUESTA - 1]);
+    let hechos = 0;
+    for (const fila of pendientes) {
+      if (hechos >= CONFIG.MAX_BORRADORES_POR_EJECUCION) break;
+      if (Date.now() - inicio > CONFIG.TIEMPO_MAXIMO_MS) break;
+      const id = fila[COL.ID - 1];
+      try {
+        const salida = redactar_(fila, contexto, '');
+        guardarRedaccion_(id, salida, '');
+        contexto.anotarApertura(fila[COL.RESTAURANTE - 1], salida.respuesta);
+      } catch (e) {
+        if (e.limite) break; // sin cupo en ningún modelo: se sigue más tarde
+        if (e.tipo === 'clave') {
+          avisarError_('clave_gemini', 'La clave de Gemini (GEMINI_API_KEY) no es válida o no tiene ' +
+            'permiso. Revísala en la configuración del proyecto. Detalle: ' + e.message);
+          break;
+        }
+        conBloqueo_(() => {
+          const n = filaPorId_(hoja_(HOJA.RESPUESTAS), id);
+          if (!n) return;
+          const h = hoja_(HOJA.RESPUESTAS);
+          h.getRange(n, COL.ESTADO).setValue(ESTADO.ERROR);
+          h.getRange(n, COL.RESPUESTA).setNote(String(e.message || e));
+        });
+      }
+      hechos++;
+      Utilities.sleep(CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
     }
-    hechos++;
-    Utilities.sleep(CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
+  } finally {
+    props.deleteProperty('GENERANDO_HASTA');
   }
 }
 
-/** Menú: vuelve a redactar la fila seleccionada (usa "Instrucción (->)"). */
+/** Menú de la hoja: vuelve a redactar la fila seleccionada. */
 function regenerarFilaSeleccionada() {
   const ui = SpreadsheetApp.getUi();
   const hoja = SpreadsheetApp.getActiveSheet();
   const fila = hoja.getActiveRange() ? hoja.getActiveRange().getRow() : 0;
-  if (hoja.getName() !== HOJA_RESPUESTAS || fila < 2) {
-    ui.alert('Selecciona una fila de la pestaña "' + HOJA_RESPUESTAS + '".');
+  if (hoja.getName() !== HOJA.RESPUESTAS || fila < 2) {
+    ui.alert('Selecciona una fila de la pestaña "' + HOJA.RESPUESTAS + '".');
     return;
   }
-  const valores = hoja.getRange(fila, 1, 1, CABECERA.length).getValues()[0];
+  const id = hoja.getRange(fila, COL.ID).getValue();
+  const instruccion = hoja.getRange(fila, COL.INSTRUCCION).getValue();
   try {
-    const texto = redactar_(valores, leerRestaurantes_());
-    hoja.getRange(fila, COL.RESPUESTA).setValue(texto).clearNote();
-    if (valores[COL.ESTADO - 1] === ESTADO.ERROR) {
-      hoja.getRange(fila, COL.ESTADO).setValue(ESTADO.PENDIENTE);
-    }
+    regenerarPorId_(id, instruccion);
   } catch (e) {
     ui.alert('No se pudo redactar: ' + (e.message || e));
   }
 }
 
-
-// ---------------------------------------------------------------- IA
-
-function redactar_(fila, restaurantes) {
-  const nombre = fila[COL.RESTAURANTE - 1];
-  const rest = buscarRestaurante_(restaurantes, nombre) ||
-    { nombre: nombre, ciudad: '', keywords: '', notas: '' };
-  const partes = [rest.ciudad ? 'Restaurante: ' + rest.nombre + ' (' + rest.ciudad + ')'
-    : 'Restaurante: ' + rest.nombre];
-  if (rest.keywords) {
-    partes.push('Keywords disponibles (usar 1-2 como máximo y solo si encajan): ' + rest.keywords);
-  }
-  if (rest.notas) partes.push('Notas del equipo: ' + rest.notas);
-  partes.push('Cliente: ' + fila[COL.CLIENTE - 1]);
-  partes.push('Puntuación: ' + fila[COL.ESTRELLAS - 1] + ' estrellas');
-  const texto = String(fila[COL.RESENA - 1] || '').trim();
-  partes.push(texto ? 'Reseña:\n' + texto : 'Reseña: (sin texto, solo puntuación)');
-  const instruccion = String(fila[COL.INSTRUCCION - 1] || '').trim();
-  if (instruccion) partes.push('-> ' + instruccion.replace(/^->\s*/, ''));
-  return llamarGemini_(partes.join('\n'));
+function regenerarPorId_(id, instruccion) {
+  const contexto = cargarContexto_();
+  const fila = contexto.filas.find(f => f[COL.ID - 1] === id);
+  if (!fila) throw new Error('No encuentro esa reseña en la hoja.');
+  const salida = redactar_(fila, contexto, String(instruccion || ''), true);
+  guardarRedaccion_(id, salida, String(instruccion || ''));
+  return salida;
 }
 
-function llamarGemini_(promptUsuario) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-    CONFIG.GEMINI_MODEL + ':generateContent';
-  const res = UrlFetchApp.fetch(url, {
+function guardarRedaccion_(id, salida, instruccion) {
+  conBloqueo_(() => {
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    const n = filaPorId_(hoja, id);
+    if (!n) return;
+    const v = hoja.getRange(n, 1, 1, CABECERA.length).getValues()[0];
+    hoja.getRange(n, COL.RESPUESTA).setValue(salida.respuesta).clearNote();
+    hoja.getRange(n, COL.AVISO).setValue(salida.aviso || '');
+    hoja.getRange(n, COL.MODELO).setValue(salida.modelo);
+    if (instruccion) hoja.getRange(n, COL.INSTRUCCION).setValue(instruccion);
+    if (salida.traduccion && !v[COL.TRADUCCION - 1]) hoja.getRange(n, COL.TRADUCCION).setValue(salida.traduccion);
+    const estado = v[COL.ESTADO - 1];
+    if (estado !== ESTADO.MANO && estado !== ESTADO.PUBLICADA && estado !== ESTADO.DESCARTADA) {
+      hoja.getRange(n, COL.ESTADO).setValue(salida.aviso ? ESTADO.REVISAR : ESTADO.PENDIENTE);
+    }
+  });
+}
+
+/** Lee una vez todo lo que la IA necesita: filas, restaurantes, ejemplos y prompt. */
+function cargarContexto_() {
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const ultima = hoja.getLastRow();
+  const filas = ultima < 2 ? [] : hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
+  const aperturas = {};
+  filas.forEach(f => { // la hoja está ordenada de más reciente a más antigua
+    const r = f[COL.RESTAURANTE - 1];
+    const texto = f[COL.PUBLICADA - 1] || f[COL.RESPUESTA - 1];
+    if (!texto) return;
+    aperturas[r] = aperturas[r] || [];
+    if (aperturas[r].length < CONFIG.APERTURAS_A_EVITAR) aperturas[r].push(apertura_(texto));
+  });
+  return {
+    filas: filas,
+    restaurantes: leerRestaurantes_(),
+    ejemplos: leerEjemplos_(),
+    prompt: leerPrompt_(),
+    aperturas: aperturas,
+    anotarApertura: function (r, texto) {
+      this.aperturas[r] = [apertura_(texto)].concat(this.aperturas[r] || [])
+        .slice(0, CONFIG.APERTURAS_A_EVITAR);
+    },
+  };
+}
+
+function redactar_(fila, contexto, instruccion, manual) {
+  const nombre = String(fila[COL.RESTAURANTE - 1]);
+  const rest = buscarRestaurantePorNombre_(contexto.restaurantes, nombre) ||
+    { nombre: nombre, ciudad: '', keywords: '', notas: '' };
+  const idioma = String(fila[COL.IDIOMA - 1] || '');
+  const texto = String(fila[COL.RESENA - 1] || '').trim();
+  const estrellas = Number(fila[COL.ESTRELLAS - 1]);
+  const pedirTraduccion = !fila[COL.TRADUCCION - 1] && texto && idioma !== 'es';
+
+  const p = [];
+  p.push('Plataforma: ' + fila[COL.PLATAFORMA - 1]);
+  p.push('Restaurante: ' + rest.nombre + (rest.ciudad ? ' (' + rest.ciudad + ')' : ''));
+  if (rest.keywords) p.push('Keywords disponibles (usar 1-2 como máximo y solo si encajan): ' + rest.keywords);
+  if (rest.notas) p.push('Notas del equipo: ' + rest.notas);
+
+  const ejemplos = elegirEjemplos_(contexto.ejemplos, rest.nombre, idioma);
+  if (ejemplos.length) {
+    p.push('');
+    p.push('Ejemplos reales de cómo responde el equipo (imita el tono y la naturalidad; NO copies sus frases ni su estructura):');
+    ejemplos.forEach((e, i) => {
+      p.push('[' + (i + 1) + '] ' + (e.restaurante !== rest.nombre ? '(otro local del grupo) ' : '') +
+        'Reseña (' + e.estrellas + '★): "' + recortar_(e.resena, 280) + '"');
+      p.push('    Respuesta: "' + recortar_(e.respuesta, 450) + '"');
+    });
+  }
+  const usadas = contexto.aperturas[rest.nombre] || [];
+  if (usadas.length) {
+    p.push('');
+    p.push('Así empezaron las últimas respuestas de este local; empieza de forma claramente distinta:');
+    usadas.forEach(a => p.push('- "' + a + '"'));
+  }
+
+  p.push('');
+  p.push('Cliente: ' + fila[COL.CLIENTE - 1]);
+  p.push('Puntuación: ' + estrellas + ' estrellas');
+  p.push(texto ? 'Reseña:\n' + texto : 'Reseña: (sin texto, solo puntuación)');
+  if (estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR) p.push('\n' + INSTRUCCION_NEGATIVA);
+  if (instruccion) p.push('-> ' + instruccion.replace(/^->\s*/, ''));
+  if (pedirTraduccion) p.push('\nIncluye en "traduccion" la traducción de la reseña al español.');
+
+  const largo = texto.length >= CONFIG.LONGITUD_RESENA_CORTA;
+  return llamarIA_(contexto.prompt, p.join('\n'), manual || largo ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
+}
+
+/** Prueba los modelos en orden, saltando los que no tienen cupo. */
+function llamarIA_(sistema, usuario, desde) {
+  const modelos = CONFIG.MODELOS.slice(Math.min(desde, CONFIG.MODELOS.length - 1));
+  for (const modelo of modelos) {
+    if (modeloEnPausa_(modelo)) continue;
+    try {
+      const salida = llamarModelo_(modelo, sistema, usuario);
+      salida.modelo = modelo;
+      return salida;
+    } catch (e) {
+      if (e.tipo === 'cuota') { pausarModelo_(modelo, e.diaria ? 3 * HORA : 2 * MIN); continue; }
+      if (e.tipo === 'temporal') { pausarModelo_(modelo, 5 * MIN); continue; }
+      if (e.tipo === 'vacio') continue; // respuesta vacía o mal formada: probar el siguiente
+      if (e.tipo === 'roto') {
+        pausarModelo_(modelo, DIA);
+        avisarError_('modelo_' + modelo, 'El modelo "' + modelo + '" no está disponible (' + e.message +
+          '). Se usan los demás; si persiste, cambiadlo en CONFIG.MODELOS.');
+        continue;
+      }
+      throw e;
+    }
+  }
+  const err = new Error('Ningún modelo de IA tiene cupo ahora; se reintentará más tarde.');
+  err.limite = true;
+  throw err;
+}
+
+function llamarModelo_(modelo, sistema, usuario) {
+  // Gemini: instrucciones de sistema y salida JSON con aviso y traducción.
+  // Gemma: todo en un único mensaje y salida de texto plano.
+  const json = modelo.indexOf('gemini') === 0;
+  const cuerpo = {
+    contents: [{ role: 'user', parts: [{ text: json ? usuario : sistema + '\n\n---\n\n' + usuario +
+      '\n\nDevuelve solo el texto de la respuesta.' }] }],
+    generationConfig: { temperature: 0.9, maxOutputTokens: 2048 },
+  };
+  if (json) {
+    cuerpo.systemInstruction = { parts: [{ text: sistema }] };
+    cuerpo.generationConfig.responseMimeType = 'application/json';
+    cuerpo.generationConfig.responseSchema = ESQUEMA_RESPUESTA;
+  }
+  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' +
+    modelo + ':generateContent', {
     method: 'post',
     contentType: 'application/json',
     headers: { 'x-goog-api-key': prop_('GEMINI_API_KEY') },
     muteHttpExceptions: true,
-    payload: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: promptUsuario }] }],
-      generationConfig: { temperature: 0.9, maxOutputTokens: 2048 },
-    }),
+    payload: JSON.stringify(cuerpo),
   });
   const codigo = res.getResponseCode();
-  if (codigo === 429) {
-    const e = new Error('Límite gratuito de Gemini alcanzado; se reintenta en la próxima hora.');
-    e.limite = true;
-    throw e;
+  const bruto = res.getContentText();
+  const fallo = (tipo, diaria) => {
+    const e = new Error(modelo + ' respondió ' + codigo + ': ' + bruto.slice(0, 200));
+    e.tipo = tipo;
+    e.diaria = diaria;
+    return e;
+  };
+  if (codigo === 429) throw fallo('cuota', /PerDay/i.test(bruto));
+  if (codigo === 401 || codigo === 403 || /API_KEY_INVALID|API key not valid/i.test(bruto)) throw fallo('clave');
+  if (codigo === 404 || (codigo === 400 && /not found|not supported|not enabled|unknown name|invalid json payload/i.test(bruto))) {
+    throw fallo('roto');
   }
-  if (codigo !== 200) {
-    throw new Error('Gemini respondió ' + codigo + ': ' + res.getContentText().slice(0, 300));
-  }
-  const datos = JSON.parse(res.getContentText());
+  if (codigo >= 500) throw fallo('temporal');
+  if (codigo !== 200) throw fallo('otro');
+
+  const datos = JSON.parse(bruto);
   const partes = (((datos.candidates || [])[0] || {}).content || {}).parts || [];
-  const texto = partes.map(p => p.text || '').join('').trim();
-  if (!texto) throw new Error('Gemini no devolvió texto (posible bloqueo de contenido).');
-  return texto;
+  const texto = partes.filter(x => !x.thought).map(x => x.text || '').join('').trim();
+  if (!texto) throw fallo('vacio');
+  if (!json) return { respuesta: limpiarRespuesta_(texto), aviso: '', traduccion: '' };
+  let obj;
+  try {
+    obj = JSON.parse(texto.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+  } catch (e) {
+    throw fallo('vacio');
+  }
+  if (!obj.respuesta) throw fallo('vacio');
+  return {
+    respuesta: limpiarRespuesta_(obj.respuesta),
+    aviso: String(obj.aviso || '').trim(),
+    traduccion: String(obj.traduccion || '').trim(),
+  };
+}
+
+function modeloEnPausa_(modelo) {
+  return Number(PropertiesService.getScriptProperties().getProperty('PAUSA_' + modelo) || 0) > Date.now();
+}
+
+function pausarModelo_(modelo, ms) {
+  PropertiesService.getScriptProperties().setProperty('PAUSA_' + modelo, String(Date.now() + ms));
+}
+
+function limpiarRespuesta_(t) {
+  return String(t).trim().replace(/^["“«]+|["”»]+$/g, '').trim();
 }
 
 
-// ---------------------------------------------------------------- Apify
+// =================================================================== ejemplos
+
+function leerEjemplos_() {
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.EJEMPLOS);
+  if (!hoja || hoja.getLastRow() < 2) return [];
+  return hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA_EJEMPLOS.length).getValues()
+    .filter(f => String(f[CE.USAR - 1]).toLowerCase().startsWith('s') && f[CE.RESPUESTA - 1])
+    .map(f => ({
+      restaurante: String(f[CE.RESTAURANTE - 1]),
+      idioma: String(f[CE.IDIOMA - 1]),
+      estrellas: f[CE.ESTRELLAS - 1],
+      resena: String(f[CE.RESENA - 1]),
+      respuesta: String(f[CE.RESPUESTA - 1]),
+      corregida: f[CE.ORIGEN - 1] === ORIGEN.CORREGIDA,
+    }));
+}
+
+/** Prioriza ejemplos del mismo local, corregidos por el equipo y del mismo idioma. */
+function elegirEjemplos_(ejemplos, restaurante, idioma) {
+  const puntuar = e => (e.restaurante === restaurante ? 4 : 0) + (e.corregida ? 2 : 0) +
+    (idioma && e.idioma === idioma ? 1 : 0) + Math.random();
+  const propios = ejemplos.filter(e => e.restaurante === restaurante);
+  const candidatos = propios.length >= 2 ? propios
+    : ejemplos.filter(e => e.restaurante === restaurante || !idioma || e.idioma === idioma);
+  return candidatos.map(e => ({ e: e, p: puntuar(e) }))
+    .sort((a, b) => b.p - a.p)
+    .slice(0, CONFIG.EJEMPLOS_EN_PROMPT)
+    .map(x => x.e);
+}
+
+function agregarEjemplos_(lista, origen) {
+  const hoja = hoja_(HOJA.EJEMPLOS, true);
+  const ultima = hoja.getLastRow();
+  const existentes = ultima < 2 ? [] : hoja.getRange(2, 1, ultima - 1, CABECERA_EJEMPLOS.length).getValues();
+  const ids = {};
+  const historicos = {};
+  existentes.forEach(f => {
+    ids[f[CE.ID - 1]] = true;
+    if (f[CE.ORIGEN - 1] === ORIGEN.HISTORICO) {
+      historicos[f[CE.RESTAURANTE - 1]] = (historicos[f[CE.RESTAURANTE - 1]] || 0) + 1;
+    }
+  });
+  const nuevas = [];
+  lista.forEach(r => {
+    if (!r.id || ids[r.id]) return;
+    if (origen === ORIGEN.HISTORICO) {
+      if ((historicos[r.restaurante] || 0) >= MAX_HISTORICOS_POR_LOCAL) return;
+      historicos[r.restaurante] = (historicos[r.restaurante] || 0) + 1;
+    }
+    ids[r.id] = true;
+    nuevas.push(['Sí', r.restaurante, r.idioma || '', r.estrellas, recortar_(r.texto, 600),
+      recortar_(r.respuestaPropietario, 1000), origen, r.id]);
+  });
+  if (nuevas.length) hoja.getRange(ultima + 1, 1, nuevas.length, CABECERA_EJEMPLOS.length).setValues(nuevas);
+}
+
+
+// ================================================================== cola móvil
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Cola')
+    .setTitle('Respuestas · Unicum')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/** Datos de la cola: reseñas abiertas, de la más reciente a la más antigua. */
+function colaDatos() {
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const ultima = hoja.getLastRow();
+  if (ultima < 2) return { resenas: [], hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() };
+  const filas = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
+  const enlaces = hoja.getRange(2, COL.ENLACE, ultima - 1, 1).getRichTextValues();
+  const resenas = filas
+    .map((f, i) => ({ f: f, url: (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '' }))
+    .filter(x => ESTADOS_ABIERTOS.indexOf(x.f[COL.ESTADO - 1]) >= 0)
+    .slice(0, 300)
+    .map(({ f, url }) => ({
+      id: f[COL.ID - 1],
+      fecha: f[COL.FECHA - 1] instanceof Date ? f[COL.FECHA - 1].toISOString() : String(f[COL.FECHA - 1]),
+      plataforma: f[COL.PLATAFORMA - 1],
+      restaurante: f[COL.RESTAURANTE - 1],
+      cliente: f[COL.CLIENTE - 1],
+      estrellas: Number(f[COL.ESTRELLAS - 1]),
+      idioma: f[COL.IDIOMA - 1],
+      resena: f[COL.RESENA - 1],
+      traduccion: f[COL.TRADUCCION - 1],
+      respuesta: f[COL.RESPUESTA - 1],
+      url: url,
+      estado: f[COL.ESTADO - 1],
+      aviso: f[COL.AVISO - 1],
+    }));
+  return { resenas: resenas, hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() };
+}
+
+/** Acciones desde la cola: publicada, descartar, regenerar, reabrir. */
+function colaAccion(id, accion, datos) {
+  datos = datos || {};
+  if (accion === 'regenerar') {
+    const s = regenerarPorId_(id, datos.instruccion || '');
+    return { respuesta: s.respuesta, aviso: s.aviso, traduccion: s.traduccion };
+  }
+  return conBloqueo_(() => {
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    const n = filaPorId_(hoja, id);
+    if (!n) throw new Error('Esa reseña ya no está en la hoja.');
+    const valores = hoja.getRange(n, 1, 1, CABECERA.length).getValues()[0];
+    if (accion === 'publicada') {
+      hoja.getRange(n, COL.ESTADO).setValue(ESTADO.PUBLICADA);
+      const texto = String(datos.texto || '').trim();
+      if (texto) {
+        hoja.getRange(n, COL.PUBLICADA).setValue(texto);
+        aprenderDeFila_(valores, texto);
+      }
+    } else if (accion === 'descartar') {
+      hoja.getRange(n, COL.ESTADO).setValue(ESTADO.DESCARTADA);
+    } else if (accion === 'reabrir') {
+      const negativa = Number(valores[COL.ESTRELLAS - 1]) < CONFIG.MIN_ESTRELLAS_BORRADOR;
+      hoja.getRange(n, COL.ESTADO).setValue(negativa ? ESTADO.MANO : ESTADO.PENDIENTE);
+    } else {
+      throw new Error('Acción desconocida: ' + accion);
+    }
+    return { ok: true };
+  });
+}
+
+
+// ===================================================================== correos
+
+function avisarNegativas_(lista) {
+  const filas = lista.map(r =>
+    '<li><b>' + esc_(r.restaurante) + '</b> · ' + r.plataforma + ' · ' + r.estrellas + '★ · ' +
+    esc_(r.cliente) + '<br><i>' + esc_(recortar_(r.texto || '(sin texto)', 300)) + '</i>' +
+    (r.url ? '<br><a href="' + esc_(r.url) + '">Abrir la reseña</a>' : '') + '</li>').join('');
+  enviarCorreo_('⚠ ' + lista.length + (lista.length === 1 ? ' reseña negativa nueva' : ' reseñas negativas nuevas'),
+    '<p>Para responder a mano:</p><ul>' + filas + '</ul>' + pieCorreo_());
+}
+
+function enviarResumenSiToca_() {
+  if (!CONFIG.RESUMEN_DIARIO_HORA) return;
+  const props = PropertiesService.getScriptProperties();
+  const ahora = new Date();
+  const hoy = Utilities.formatDate(ahora, ZONA, 'yyyy-MM-dd');
+  if (Number(Utilities.formatDate(ahora, ZONA, 'H')) < CONFIG.RESUMEN_DIARIO_HORA) return;
+  if (props.getProperty('RESUMEN_ENVIADO') === hoy) return;
+  props.setProperty('RESUMEN_ENVIADO', hoy);
+
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const ultima = hoja.getLastRow();
+  if (ultima < 2) return;
+  const cuenta = {};
+  let total = 0;
+  hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues().forEach(f => {
+    const estado = f[COL.ESTADO - 1];
+    if (ESTADOS_ABIERTOS.indexOf(estado) < 0) return;
+    const r = f[COL.RESTAURANTE - 1];
+    cuenta[r] = cuenta[r] || { listas: 0, revisar: 0, mano: 0 };
+    if (estado === ESTADO.MANO) cuenta[r].mano++;
+    else if (estado === ESTADO.REVISAR) cuenta[r].revisar++;
+    else cuenta[r].listas++;
+    total++;
+  });
+  if (!total) return;
+  const filas = Object.keys(cuenta).sort().map(r => '<tr><td>' + esc_(r) + '</td><td>' + cuenta[r].listas +
+    '</td><td>' + cuenta[r].revisar + '</td><td>' + cuenta[r].mano + '</td></tr>').join('');
+  enviarCorreo_(total + ' reseñas esperando respuesta',
+    '<table cellpadding="6" style="border-collapse:collapse"><tr><th align="left">Local</th>' +
+    '<th>Listas</th><th>Revisar ⚠</th><th>Negativas</th></tr>' + filas + '</table>' + pieCorreo_());
+}
+
+/** Avisos de errores, como mucho uno cada 12 h por tipo. */
+function avisarError_(clave, mensaje) {
+  console.warn(mensaje);
+  const props = PropertiesService.getScriptProperties();
+  if (Date.now() - Number(props.getProperty('AVISO_' + clave) || 0) < 12 * HORA) return;
+  props.setProperty('AVISO_' + clave, String(Date.now()));
+  try {
+    enviarCorreo_('Aviso del sistema de reseñas', '<p>' + esc_(mensaje) + '</p>' + pieCorreo_());
+  } catch (e) {
+    console.warn('No se pudo enviar el aviso: ' + e);
+  }
+}
+
+function enviarCorreo_(asunto, html) {
+  const destino = CONFIG.EMAIL_AVISOS || Session.getEffectiveUser().getEmail();
+  if (!destino) return;
+  MailApp.sendEmail({ to: destino, subject: 'Reseñas Unicum · ' + asunto, htmlBody: html, name: 'Reseñas Unicum' });
+}
+
+function pieCorreo_() {
+  const cola = ScriptApp.getService().getUrl();
+  return '<p>' + (cola ? '<a href="' + cola + '"><b>Abrir la cola de respuestas</b></a> · ' : '') +
+    '<a href="' + SpreadsheetApp.getActiveSpreadsheet().getUrl() + '">Abrir la hoja</a></p>';
+}
+
+
+// ======================================================================= Apify
 
 function apify_(metodo, ruta, cuerpo) {
   const opciones = {
@@ -393,28 +932,51 @@ function apify_(metodo, ruta, cuerpo) {
   }
   const res = UrlFetchApp.fetch('https://api.apify.com/v2/' + ruta, opciones);
   const codigo = res.getResponseCode();
-  if (codigo === 404) return null; // todavía no hay ninguna lectura
+  if (codigo === 404) return null;
   if (codigo >= 300) {
     throw new Error('Apify respondió ' + codigo + ': ' + res.getContentText().slice(0, 300));
   }
   return JSON.parse(res.getContentText());
 }
 
+/** Gasto del mes en Apify (USD), con una hora de caché. null si no se sabe. */
+function gastoApify_(fresco) {
+  const cache = CacheService.getScriptCache();
+  const guardado = fresco ? null : cache.get('GASTO_APIFY');
+  if (guardado !== null) return Number(guardado);
+  try {
+    const r = apify_('GET', 'users/me/limits');
+    const usd = Number(r && r.data && r.data.current && r.data.current.monthlyUsageUsd);
+    if (isNaN(usd)) return null;
+    cache.put('GASTO_APIFY', String(usd), 3600);
+    return usd;
+  } catch (e) {
+    return null;
+  }
+}
 
-// ---------------------------------------------------------------- hojas
+
+// ======================================================================= hojas
 
 function prepararHojaRespuestas_() {
-  const hoja = hoja_(HOJA_RESPUESTAS, true);
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const vieja = libro.getSheetByName(HOJA.RESPUESTAS);
+  if (vieja && vieja.getLastRow() >= 1 && vieja.getRange(1, 2).getValue() !== 'Plataforma') {
+    // Hoja de la versión 1: se conserva aparte.
+    vieja.setName(HOJA.RESPUESTAS + ' (v1) ' + Utilities.formatDate(new Date(), ZONA, 'dd-MM HH:mm'));
+  }
+  const hoja = hoja_(HOJA.RESPUESTAS, true);
   hoja.getRange(1, 1, 1, CABECERA.length).setValues([CABECERA])
     .setFontWeight('bold').setBackground('#1f3a5f').setFontColor('#ffffff');
   hoja.setFrozenRows(1);
-  const anchos = [110, 150, 140, 40, 60, 320, 260, 180, 380, 80, 140, 60];
-  anchos.forEach((a, i) => hoja.setColumnWidth(i + 1, a));
-  hoja.hideColumns(COL.ID);
+  [110, 90, 150, 140, 40, 55, 320, 260, 170, 380, 70, 130, 220, 280, 120, 60]
+    .forEach((a, i) => hoja.setColumnWidth(i + 1, a));
+  hoja.hideColumns(COL.MODELO, 2);
 
   const filas = hoja.getMaxRows() - 1;
   hoja.getRange(2, COL.FECHA, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
   hoja.getRange(2, COL.RESENA, filas, 4).setWrap(true);
+  hoja.getRange(2, COL.AVISO, filas, 2).setWrap(true);
   hoja.getRange(2, 1, filas, CABECERA.length).setVerticalAlignment('top');
   hoja.getRange(2, COL.ESTADO, filas, 1).setDataValidation(
     SpreadsheetApp.newDataValidation()
@@ -422,10 +984,11 @@ function prepararHojaRespuestas_() {
 
   const rango = hoja.getRange(2, 1, filas, CABECERA.length);
   const regla = (estado, color) => SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=$K2="' + estado + '"').setBackground(color)
+    .whenFormulaSatisfied('=$L2="' + estado + '"').setBackground(color)
     .setRanges([rango]).build();
   hoja.setConditionalFormatRules([
     regla(ESTADO.MANO, '#f8d7da'),
+    regla(ESTADO.REVISAR, '#ffe5b4'),
     regla(ESTADO.ERROR, '#fff3cd'),
     regla(ESTADO.PUBLICADA, '#d4edda'),
     regla(ESTADO.DESCARTADA, '#e9ecef'),
@@ -433,39 +996,104 @@ function prepararHojaRespuestas_() {
 }
 
 function prepararHojaRestaurantes_() {
-  const hoja = hoja_(HOJA_RESTAURANTES, true);
-  if (hoja.getLastRow() >= 2) return; // no pisar lo que ya hayáis editado
+  const hoja = hoja_(HOJA.RESTAURANTES, true);
+  if (hoja.getLastRow() >= 1 && hoja.getRange(1, CR.TRIPADVISOR).getValue() === 'Keywords SEO') {
+    // Hoja de la versión 1: se añade la columna de TripAdvisor sin perder nada.
+    hoja.insertColumnBefore(CR.TRIPADVISOR);
+    hoja.getRange(1, CR.TRIPADVISOR).setValue(CABECERA_RESTAURANTES[CR.TRIPADVISOR - 1]);
+  }
   hoja.getRange(1, 1, 1, CABECERA_RESTAURANTES.length).setValues([CABECERA_RESTAURANTES])
     .setFontWeight('bold').setBackground('#1f3a5f').setFontColor('#ffffff');
   hoja.setFrozenRows(1);
-  hoja.getRange(2, 1, RESTAURANTES_INICIALES.length, CABECERA_RESTAURANTES.length)
-    .setValues(RESTAURANTES_INICIALES).setWrap(true).setVerticalAlignment('top');
-  [60, 180, 130, 300, 420, 360].forEach((a, i) => hoja.setColumnWidth(i + 1, a));
+  [60, 180, 130, 300, 300, 420, 360].forEach((a, i) => hoja.setColumnWidth(i + 1, a));
   hoja.getRange(2, 1, hoja.getMaxRows() - 1, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(['Sí', 'No'], true).build());
+  if (hoja.getLastRow() >= 2) return; // no pisar lo que ya hayáis editado
+  hoja.getRange(2, 1, RESTAURANTES_INICIALES.length, CABECERA_RESTAURANTES.length)
+    .setValues(RESTAURANTES_INICIALES).setWrap(true).setVerticalAlignment('top');
+}
+
+/** Devuelve true si la pestaña de ejemplos es nueva. */
+function prepararHojaEjemplos_() {
+  const nueva = !SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.EJEMPLOS);
+  const hoja = hoja_(HOJA.EJEMPLOS, true);
+  hoja.getRange(1, 1, 1, CABECERA_EJEMPLOS.length).setValues([CABECERA_EJEMPLOS])
+    .setFontWeight('bold').setBackground('#1f3a5f').setFontColor('#ffffff');
+  hoja.setFrozenRows(1);
+  [50, 150, 60, 40, 380, 440, 170, 60].forEach((a, i) => hoja.setColumnWidth(i + 1, a));
+  hoja.hideColumns(CE.ID);
+  hoja.getRange(2, CE.RESENA, hoja.getMaxRows() - 1, 2).setWrap(true);
+  hoja.getRange(2, 1, hoja.getMaxRows() - 1, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(['Sí', 'No'], true).build());
+  return nueva;
+}
+
+function prepararHojaPrompt_() {
+  const hoja = hoja_(HOJA.PROMPT, true);
+  hoja.getRange(1, 1).setValue('Instrucciones para la IA (podéis editarlas; si borráis la celda A2 se usan las originales)')
+    .setFontWeight('bold');
+  hoja.setColumnWidth(1, 900);
+  if (!hoja.getRange(2, 1).getValue()) hoja.getRange(2, 1).setValue(PROMPT_POR_DEFECTO);
+  hoja.getRange(2, 1).setWrap(true).setVerticalAlignment('top');
+}
+
+function leerPrompt_() {
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.PROMPT);
+  const texto = hoja ? String(hoja.getRange(2, 1).getValue() || '').trim() : '';
+  return texto || PROMPT_POR_DEFECTO;
 }
 
 function leerRestaurantes_() {
-  const hoja = hoja_(HOJA_RESTAURANTES);
+  const hoja = hoja_(HOJA.RESTAURANTES);
   if (hoja.getLastRow() < 2) return [];
   return hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA_RESTAURANTES.length).getValues()
-    .filter(f => f[1])
-    .map(f => ({
-      activo: String(f[0]).trim().toLowerCase().startsWith('s'),
-      nombre: String(f[1]).trim(),
-      ciudad: String(f[2]).trim(),
-      url: String(f[3]).trim(),
-      keywords: String(f[4]).trim(),
-      notas: String(f[5]).trim(),
-    }));
+    .filter(f => f[CR.NOMBRE - 1])
+    .map(f => {
+      const google = String(f[CR.GOOGLE - 1]).trim();
+      const tripadvisor = String(f[CR.TRIPADVISOR - 1]).trim();
+      return {
+        activo: String(f[CR.ACTIVO - 1]).trim().toLowerCase().startsWith('s'),
+        nombre: String(f[CR.NOMBRE - 1]).trim(),
+        ciudad: String(f[CR.CIUDAD - 1]).trim(),
+        google: google,
+        tripadvisor: tripadvisor,
+        keywords: String(f[CR.KEYWORDS - 1]).trim(),
+        notas: String(f[CR.NOTAS - 1]).trim(),
+        cid: (google.match(/cid=(\d+)/) || [])[1] || '',
+        idTripadvisor: (tripadvisor.match(/-d(\d+)-/) || [])[1] || '',
+      };
+    });
 }
 
-function buscarRestaurante_(restaurantes, nombreFicha) {
-  const nombre = String(nombreFicha || '').toLowerCase();
+/** Asocia una reseña a su restaurante: por identificador si se puede, si no por nombre. */
+function asociarRestaurante_(restaurantes, r) {
+  const idTa = (String(r.url).match(/-d(\d+)-/) || [])[1];
+  const porId = restaurantes.find(x =>
+    (r.cid && x.cid === r.cid) || (idTa && r.plataforma === 'TripAdvisor' && x.idTripadvisor === idTa));
+  return porId || buscarRestaurantePorNombre_(restaurantes, r.nombreFicha);
+}
+
+function buscarRestaurantePorNombre_(restaurantes, nombre) {
+  const n = normalizar_(nombre);
+  if (!n) return null;
   // El nombre configurado más largo primero ("Madre Santa Pizza" antes que "Madre").
   return restaurantes.slice()
     .sort((a, b) => b.nombre.length - a.nombre.length)
-    .find(r => nombre.indexOf(r.nombre.toLowerCase()) >= 0) || null;
+    .find(r => n.indexOf(normalizar_(r.nombre)) >= 0) || null;
+}
+
+/** Añade filas al final (ya formateadas) y ordena: lo más reciente arriba. */
+function anadirFilas_(hoja, filas) {
+  const inicio = hoja.getLastRow() + 1;
+  const faltan = inicio + filas.length - 1 - hoja.getMaxRows();
+  if (faltan > 0) hoja.insertRowsAfter(hoja.getMaxRows(), faltan);
+  hoja.getRange(inicio, 1, filas.length, CABECERA.length).setValues(filas);
+  hoja.getRange(inicio, COL.ENLACE, filas.length, 1).setRichTextValues(filas.map(f => [
+    f[COL.ENLACE - 1]
+      ? SpreadsheetApp.newRichTextValue().setText('Abrir ↗').setLinkUrl(f[COL.ENLACE - 1]).build()
+      : SpreadsheetApp.newRichTextValue().setText('').build()]));
+  hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length)
+    .sort({ column: COL.FECHA, ascending: false });
 }
 
 function indexarFilas_(hoja) {
@@ -477,11 +1105,8 @@ function indexarFilas_(hoja) {
   return indice;
 }
 
-function escribirEnlaces_(hoja, filaInicio, urls) {
-  const valores = urls.map(u => [u
-    ? SpreadsheetApp.newRichTextValue().setText('Abrir ↗').setLinkUrl(u).build()
-    : SpreadsheetApp.newRichTextValue().setText('').build()]);
-  hoja.getRange(filaInicio, COL.ENLACE, valores.length, 1).setRichTextValues(valores);
+function filaPorId_(hoja, id) {
+  return indexarFilas_(hoja)[String(id)] || 0;
 }
 
 function hoja_(nombre, crear) {
@@ -492,10 +1117,58 @@ function hoja_(nombre, crear) {
   return hoja;
 }
 
+/** Serializa los cambios de estructura (ordenar, escribir por ID). */
+function conBloqueo_(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function prop_(clave, obligatoria) {
   const valor = PropertiesService.getScriptProperties().getProperty(clave);
   if (!valor && obligatoria !== false) {
     throw new Error('Falta la propiedad ' + clave + ' en la configuración del proyecto.');
   }
   return valor;
+}
+
+
+// ===================================================================== utilidades
+
+function fecha_(valor) {
+  const f = new Date(valor || Date.now());
+  return isNaN(f.getTime()) ? new Date() : f;
+}
+
+function normalizar_(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+function recortar_(s, n) {
+  s = String(s || '').trim();
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+function apertura_(texto) {
+  const t = String(texto).trim().split(/(?<=[.!?¡¿])\s/)[0];
+  return recortar_(t, 80);
+}
+
+/** Parecido entre dos textos (0-1) por palabras compartidas. */
+function similitud_(a, b) {
+  const palabras = s => new Set(normalizar_(s).split(/[^a-z0-9ñ]+/).filter(w => w.length > 2));
+  const pa = palabras(a);
+  const pb = palabras(b);
+  if (!pa.size || !pb.size) return 0;
+  let comunes = 0;
+  pa.forEach(w => { if (pb.has(w)) comunes++; });
+  return comunes / Math.max(pa.size, pb.size);
+}
+
+function esc_(s) {
+  return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 }

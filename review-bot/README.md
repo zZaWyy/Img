@@ -5,8 +5,10 @@ Profile y semiautomatiza las de TripAdvisor. Sin herramientas de pago.
 
 > **Mientras Google no apruebe el acceso a la API**, usad la
 > [hoja de respuestas](hoja-respuestas/GUIA.md): una hoja de Google que se
-> rellena sola con las reseñas nuevas y la respuesta ya redactada, lista
-> para copiar y pegar. No necesita la aprobación de Google.
+> rellena sola con las reseñas nuevas de Google y TripAdvisor y la respuesta
+> ya redactada, con una cola en el móvil para publicar con dos toques. No
+> necesita la aprobación de Google. Para lo que no es automático hay un
+> [Gem de Gemini y una Skill de Claude](asistentes/).
 
 ---
 

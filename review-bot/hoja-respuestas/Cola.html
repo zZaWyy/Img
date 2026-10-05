@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_blank">
+<meta charset="utf-8">
+<title>Respuestas · Unicum</title>
+<style>
+  :root {
+    --bg: #f4f1ec; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e4dfd6;
+    --accent: #1f3a5f; --accent-text: #ffffff; --ok: #1e7b4c; --warn-bg: #fff4dc; --warn: #8a5a00;
+    --bad-bg: #fde8ea; --bad: #a3242f; --chip: #ebe6dd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --card: #1f1f22; --text: #f1f1f3; --muted: #a1a1a8; --line: #2e2e33;
+      --accent: #8fb3e0; --accent-text: #0e1a2b; --ok: #5ccf94; --warn-bg: #3a2e12; --warn: #f2c66d;
+      --bad-bg: #3b1a1e; --bad: #ff8c96; --chip: #2a2a2f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--line); }
+  h1 { font-size: 18px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; }
+  .tab { border: 0; background: var(--chip); color: var(--text); padding: 7px 12px; border-radius: 999px;
+    font-size: 14px; white-space: nowrap; cursor: pointer; }
+  .tab.on { background: var(--accent); color: var(--accent-text); }
+  select { margin-top: 8px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 15px; }
+  main { padding: 12px 16px 80px; max-width: 760px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+    margin-bottom: 12px; transition: opacity .25s, transform .25s; }
+  .card.fuera { opacity: 0; transform: translateX(30px); }
+  .meta { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .meta b { color: var(--text); font-size: 15px; }
+  .stars { color: #d69e2e; letter-spacing: 1px; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); }
+  .resena { margin: 10px 0 6px; white-space: pre-wrap; }
+  .vacia { color: var(--muted); font-style: italic; }
+  details { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px;
+    font-size: 14px; margin: 8px 0; }
+  textarea { width: 100%; min-height: 110px; border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px; font: inherit; background: var(--bg); color: var(--text); resize: vertical; }
+  .botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  button.b { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px;
+    padding: 10px 12px; font-size: 15px; cursor: pointer; }
+  button.prim { background: var(--accent); color: var(--accent-text); border-color: var(--accent); flex: 1 1 100%; font-weight: 600; }
+  button.ok { color: var(--ok); }
+  button:disabled { opacity: .5; }
+  .negativa { border-left: 4px solid var(--bad); }
+  .estado { color: var(--bad); font-weight: 600; font-size: 13px; }
+  .vacio-lista { text-align: center; color: var(--muted); padding: 40px 0; }
+  #toast { position: fixed; left: 16px; right: 16px; bottom: 16px; background: var(--text); color: var(--bg);
+    padding: 12px 14px; border-radius: 12px; font-size: 15px; display: none; z-index: 5; text-align: center; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Respuestas · Unicum</span><button class="b" id="recargar" title="Recargar">↻</button></h1>
+  <div class="tabs" id="tabs"></div>
+  <select id="filtro"><option value="">Todos los locales</option></select>
+</header>
+<main id="lista"><p class="vacio-lista">Cargando…</p></main>
+<div id="toast"></div>
+
+<script>
+  const TABS = [
+    { clave: 'listas', nombre: 'Por publicar', estados: ['Pendiente', 'Error IA (regenerar)'] },
+    { clave: 'revisar', nombre: 'Revisar ⚠', estados: ['Revisar ⚠'] },
+    { clave: 'negativas', nombre: 'Negativas', estados: ['A mano (negativa)'] },
+  ];
+  let datos = [];
+  let tab = 'listas';
+
+  const $ = id => document.getElementById(id);
+  const el = (tag, cls, texto) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (texto !== undefined) e.textContent = texto; // nunca innerHTML con texto de reseñas
+    return e;
+  };
+
+  function toast(msg, ms) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(t._h);
+    t._h = setTimeout(() => { t.style.display = 'none'; }, ms || 3500);
+  }
+
+  function cargar() {
+    $('lista').replaceChildren(el('p', 'vacio-lista', 'Cargando…'));
+    google.script.run
+      .withSuccessHandler(r => { datos = r.resenas; pintarFiltro(); pintar(); })
+      .withFailureHandler(e => $('lista').replaceChildren(el('p', 'vacio-lista', 'Error: ' + e.message)))
+      .colaDatos();
+  }
+
+  function enTab(r, clave) {
+    return TABS.find(t => t.clave === clave).estados.indexOf(r.estado) >= 0;
+  }
+
+  function pintarFiltro() {
+    const sel = $('filtro');
+    const actual = sel.value;
+    const locales = [...new Set(datos.map(r => r.restaurante))].sort();
+    sel.replaceChildren(el('option', '', 'Todos los locales'));
+    sel.options[0].value = '';
+    locales.forEach(l => { const o = el('option', '', l); o.value = l; sel.appendChild(o); });
+    sel.value = locales.indexOf(actual) >= 0 ? actual : '';
+  }
+
+  function pintar() {
+    const filtro = $('filtro').value;
+    const visibles = datos.filter(r => !filtro || r.restaurante === filtro);
+    const tabs = $('tabs');
+    tabs.replaceChildren();
+    TABS.forEach(t => {
+      const n = visibles.filter(r => enTab(r, t.clave)).length;
+      const b = el('button', 'tab' + (t.clave === tab ? ' on' : ''), t.nombre + ' (' + n + ')');
+      b.onclick = () => { tab = t.clave; pintar(); };
+      tabs.appendChild(b);
+    });
+    const lista = $('lista');
+    const items = visibles.filter(r => enTab(r, tab));
+    lista.replaceChildren();
+    if (!items.length) {
+      lista.appendChild(el('p', 'vacio-lista', tab === 'listas' ? '¡Todo respondido! 🎉' : 'Nada por aquí.'));
+      return;
+    }
+    items.forEach(r => lista.appendChild(tarjeta(r)));
+  }
+
+  function tarjeta(r) {
+    const negativa = r.estado === 'A mano (negativa)';
+    const c = el('article', 'card' + (negativa ? ' negativa' : ''));
+    const meta = el('div', 'meta');
+    meta.appendChild(el('b', '', r.restaurante));
+    meta.appendChild(el('span', 'badge', r.plataforma));
+    meta.appendChild(el('span', 'stars', '★'.repeat(Math.max(0, r.estrellas)) + '☆'.repeat(Math.max(0, 5 - r.estrellas))));
+    meta.appendChild(el('span', '', r.cliente));
+    meta.appendChild(el('span', '', hace(r.fecha) + (r.idioma ? ' · ' + r.idioma : '')));
+    c.appendChild(meta);
+    if (r.estado === 'Error IA (regenerar)') c.appendChild(el('div', 'estado', 'La IA falló: pulsa “Otra versión”.'));
+
+    c.appendChild(el('div', 'resena' + (r.resena ? '' : ' vacia'), r.resena || 'Solo puntuación, sin texto.'));
+    if (r.traduccion) {
+      const d = el('details');
+      d.appendChild(el('summary', '', 'Traducción'));
+      d.appendChild(el('div', '', r.traduccion));
+      c.appendChild(d);
+    }
+    if (r.aviso) c.appendChild(el('div', 'aviso', '⚠ ' + r.aviso));
+
+    const ta = el('textarea');
+    ta.value = r.respuesta || '';
+    ta.placeholder = negativa ? 'Pulsa “Redactar borrador” y cuenta qué pasó, o escribe tu respuesta.' : '';
+    if (negativa && !r.respuesta) ta.style.display = 'none';
+    c.appendChild(ta);
+
+    const bot = el('div', 'botones');
+    const accion = (nombre, fn) => { const b = el('button', 'b', nombre); b.onclick = () => fn(b); bot.appendChild(b); return b; };
+
+    const copiar = el('button', 'b prim', r.url ? '📋 Copiar y abrir' : '📋 Copiar');
+    copiar.onclick = () => copiarYAbrir(r, ta);
+    if (!negativa || r.respuesta) bot.appendChild(copiar);
+    if (negativa) {
+      accion(r.respuesta ? '✍ Otro borrador' : '✍ Redactar borrador', b => regenerar(r, ta, b, true, copiar, bot));
+      if (!r.respuesta && r.url) accion('Abrir reseña ↗', () => window.open(r.url, '_blank'));
+    } else {
+      accion('↻ Otra versión', b => regenerar(r, ta, b, false));
+    }
+    accion('✓ Publicada', b => marcar(r, c, 'publicada', ta.value, b)).classList.add('ok');
+    accion('✕ Descartar', b => marcar(r, c, 'descartar', '', b));
+    c.appendChild(bot);
+    return c;
+  }
+
+  function copiarYAbrir(r, ta) {
+    let ok = false;
+    try {
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      ok = document.execCommand('copy');
+    } catch (e) { ok = false; }
+    if (!ok && navigator.clipboard) {
+      navigator.clipboard.writeText(ta.value).catch(() => {});
+      ok = true;
+    }
+    if (r.url) window.open(r.url, '_blank');
+    toast(ok ? 'Copiada ✔ Pégala en ' + r.plataforma + ' y vuelve para marcar “Publicada”.'
+             : 'No se pudo copiar sola: mantén pulsado el texto para copiarlo.', 5000);
+  }
+
+  function regenerar(r, ta, boton, negativa, copiar, bot) {
+    const instruccion = prompt(negativa
+      ? '¿Qué pasó o qué quieres transmitir? (la IA lo usará para el borrador)'
+      : 'Indicación opcional para la nueva versión (p. ej. “menciona la música en directo”). Déjalo vacío para otra versión sin más.', '');
+    if (instruccion === null) return;
+    boton.disabled = true;
+    const texto = boton.textContent;
+    boton.textContent = 'Redactando…';
+    google.script.run
+      .withSuccessHandler(s => {
+        ta.value = s.respuesta;
+        ta.style.display = '';
+        r.respuesta = s.respuesta;
+        if (negativa && copiar && !copiar.parentNode) bot.insertBefore(copiar, bot.firstChild);
+        boton.disabled = false;
+        boton.textContent = negativa ? '✍ Otro borrador' : texto;
+        if (s.aviso) toast('⚠ ' + s.aviso, 5000);
+      })
+      .withFailureHandler(e => { boton.disabled = false; boton.textContent = texto; toast('Error: ' + e.message, 5000); })
+      .colaAccion(r.id, 'regenerar', { instruccion: instruccion });
+  }
+
+  function marcar(r, card, accion, texto, boton) {
+    boton.disabled = true;
+    google.script.run
+      .withSuccessHandler(() => {
+        card.classList.add('fuera');
+        setTimeout(() => { datos = datos.filter(x => x.id !== r.id); pintar(); }, 250);
+        toast(accion === 'publicada' ? 'Marcada como publicada ✔' : 'Descartada', 2500);
+      })
+      .withFailureHandler(e => { boton.disabled = false; toast('Error: ' + e.message, 5000); })
+      .colaAccion(r.id, accion, { texto: texto });
+  }
+
+  function hace(iso) {
+    const ms = Date.now() - new Date(iso).getTime();
+    const h = Math.round(ms / 3600000);
+    if (isNaN(h)) return '';
+    if (h < 1) return 'hace un rato';
+    if (h < 24) return 'hace ' + h + ' h';
+    const d = Math.round(h / 24);
+    return 'hace ' + d + (d === 1 ? ' día' : ' días');
+  }
+
+  $('filtro').onchange = pintar;
+  $('recargar').onclick = cargar;
+  cargar();
+</script>
+</body>
+</html>

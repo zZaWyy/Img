@@ -1,160 +1,237 @@
-# Hoja de respuestas a reseñas: guía de instalación
+# Sistema de respuestas a reseñas (versión 2): guía
 
-Una hoja de Google que se rellena sola con las reseñas nuevas de
-Google de los 11 restaurantes y **la respuesta ya redactada** con el
-prompt de la casa. Una reseña aparece con su borrador **en una hora de
-media** (como mucho, hora y media). Entras cuando quieras, copias, pegas en
-Google y listo.
+Una hoja de Google que se rellena sola con las reseñas nuevas de **Google y
+TripAdvisor** de todos los locales y **la respuesta ya redactada** con el
+estilo de la casa. Publicas desde el móvil con dos toques.
 
-- Las de **4-5★** traen borrador, en el idioma del cliente.
-- Las de **1-3★** salen en rojo, **sin borrador**: se responden a mano.
-- Cuando una reseña ya está respondida en Google, se marca sola
-  "Publicada ✔".
-- Funciona en los servidores de Google, aunque tengas el ordenador
-  apagado. Coste: **0 €** (ver "Costes").
+## Qué hace
 
-Necesitas unos 15 minutos y tres cosas: la cuenta `simsalabimgrupo@gmail.com`,
-la clave de Gemini que ya creaste y una cuenta gratuita de Apify (paso 3).
+- **Lee las reseñas nuevas** de Google Maps cada hora y las de TripAdvisor
+  cada 12 h. Un repaso diario recoge las que Google publica con retraso.
+- **Redacta un borrador** para las de 4-5★, en el idioma del cliente, y
+  **traduce** al español las reseñas en otros idiomas.
+- **Aprende de vosotros:** lee vuestras respuestas antiguas y, cada vez que
+  corregís un borrador antes de publicarlo, guarda la versión final como
+  ejemplo. Cuanto más lo uséis, más suena a vosotros.
+- **No se repite:** evita empezar como las últimas respuestas del mismo
+  local.
+- **Detecta problemas escondidos:** si una reseña de 5★ dice *"todo genial
+  pero el café llegó frío"*, la marca **Revisar ⚠** con el motivo.
+- **Negativas (1-3★):** sin borrador y con **aviso por correo al momento**.
+  Si quieres, le cuentas qué pasó y te propone un borrador para revisar.
+- **Cola en el móvil:** una página donde, con **"Copiar y abrir"**, copias
+  la respuesta y abres la reseña para pegarla.
+- **Resumen diario** por correo a las 10:00 con lo pendiente por local.
+- Sabe cuándo ya está publicada y la marca **Publicada ✔** sola.
+
+Coste: **0 €** dentro de los planes gratuitos (ver "Costes").
 
 ---
 
-## Paso 1: Crear la hoja
+## Instalación (unos 20 minutos)
 
-1. Entra en [drive.google.com](https://drive.google.com) con
-   `simsalabimgrupo@gmail.com`.
-2. **Nuevo → Hojas de cálculo de Google**.
-3. Ponle de nombre, por ejemplo, `Respuestas reseñas Unicum`.
+Necesitas la cuenta `simsalabimgrupo@gmail.com`, tu clave de Gemini y una
+cuenta gratuita de Apify (paso 4).
 
-## Paso 2: Pegar el programa
+### Paso 1: Crear la hoja
+
+[drive.google.com](https://drive.google.com) con `simsalabimgrupo@gmail.com`
+→ **Nuevo → Hojas de cálculo de Google** → nombre: `Respuestas reseñas
+Unicum`.
+
+### Paso 2: Pegar el programa
 
 1. En la hoja: **Extensiones → Apps Script**.
-2. Se abre un editor con algo de texto (`function myFunction…`). **Bórralo
-   todo.**
-3. Pega el contenido completo del archivo `Code.gs`.
-4. Arriba, cambia "Proyecto sin título" por `Reseñas Unicum`.
-5. Pulsa el icono de **guardar** 💾.
+2. Borra todo el texto del archivo `Código.gs` y pega el contenido completo
+   de **`Code.gs`**.
+3. Arriba, cambia "Proyecto sin título" por `Reseñas Unicum`.
 
-## Paso 3: Crear la clave de Apify (gratis)
+### Paso 3: Añadir la cola del móvil
 
-Apify es el servicio que lee las reseñas públicas de Google Maps.
+1. En el mismo editor, junto a "Archivos", pulsa **＋ → HTML**.
+2. Nombre: **`Cola`**, exactamente así (el editor añade `.html` solo).
+3. Borra lo que trae y pega el contenido completo de **`Cola.html`**.
+4. Guarda 💾.
 
-1. Entra en [apify.com](https://apify.com) → **Sign up** → regístrate con
-   la cuenta de Google. Plan **Free**, sin tarjeta.
-2. En el panel: **Settings → API & Integrations**.
-3. Copia el **Personal API token**.
+### Paso 4: Clave de Apify (gratis)
 
-## Paso 4: Guardar las dos claves en el programa
+[apify.com](https://apify.com) → **Sign up** con Google (plan Free, sin
+tarjeta) → **Settings → API & Integrations** → copia el **Personal API
+token**.
 
-1. Vuelve al editor de Apps Script.
-2. En la barra de la izquierda, pulsa la **rueda ⚙ (Configuración del
-   proyecto)**.
-3. Baja hasta **Propiedades de la secuencia de comandos → Añadir
-   propiedad**, y crea estas dos (el nombre, exactamente así):
+### Paso 5: Guardar las dos claves
 
-   | Propiedad | Valor |
-   |---|---|
-   | `APIFY_TOKEN` | el token del paso 3 |
-   | `GEMINI_API_KEY` | tu clave de Gemini |
+En el editor: rueda **⚙ Configuración del proyecto** → **Propiedades de la
+secuencia de comandos → Añadir propiedad**:
 
-4. **Guardar propiedades de la secuencia de comandos**.
+| Propiedad | Valor |
+|---|---|
+| `APIFY_TOKEN` | el token de Apify |
+| `GEMINI_API_KEY` | tu clave de Gemini |
 
-## Paso 5: Instalar
+→ **Guardar propiedades de la secuencia de comandos**.
 
-1. Vuelve a la pestaña de la **hoja** y **recárgala** (F5).
-2. Arriba aparece un menú nuevo: **Reseñas**. Pulsa
-   **Reseñas → ⚙ Instalar / reparar**.
-3. Google pedirá permisos. Es normal, porque el programa es vuestro:
-   - **Continuar** → elige `simsalabimgrupo@gmail.com`.
+### Paso 6: Instalar
+
+1. Vuelve a la **hoja** y recárgala (F5). Aparece el menú **Reseñas**.
+2. **Reseñas → ⚙ Instalar / reparar**.
+3. Acepta los permisos. Es vuestro propio programa: pide leer la hoja,
+   conectarse a Apify y Gemini y enviaros correos.
    - Si sale *"Google no ha verificado esta aplicación"* → **Configuración
-     avanzada** → **Ir a Reseñas Unicum (no seguro)** → **Permitir**.
-4. Vuelve a pulsar **Reseñas → ⚙ Instalar / reparar** si no apareció el
-   mensaje "Listo".
+     avanzada → Ir a Reseñas Unicum (no seguro) → Permitir**.
+4. Si no apareció "Listo", pulsa otra vez **Instalar / reparar**.
 
-## Paso 6: Comprobar los enlaces de los restaurantes
+### Paso 7: Revisar los restaurantes y añadir TripAdvisor
 
-En la pestaña **Restaurantes** está la lista de los 11 locales con sus
-keywords. **Haz clic en cada enlace** de la columna "Enlace Google Maps" y
-comprueba que abre el restaurante correcto.
+Pestaña **Restaurantes**:
 
-Si alguno no abre el restaurante correcto, búscalo en Google Maps, copia
-la dirección de la barra del navegador y pégala en su casilla.
+1. **Haz clic en cada enlace de Google Maps** y comprueba que abre el local
+   correcto. Si alguno falla, busca el local en Google Maps y pega la
+   dirección del navegador.
+2. **Columna "Enlace TripAdvisor":** busca cada local en TripAdvisor y pega
+   la dirección de su página (la que contiene `Restaurant_Review-g…-d…`).
+   Los que dejes vacíos no se leen en TripAdvisor.
+3. Aquí se cambian también **keywords y notas**, o se desactiva un local
+   (Activo = No), sin tocar el programa.
 
-Desde esta pestaña también podéis cambiar keywords y notas, o desactivar
-un local (columna "Activo" en "No"), sin tocar el programa.
+### Paso 8: Primera lectura
 
-## Paso 7: Primera lectura
+**Reseñas → ▶ Buscar reseñas nuevas ahora.** La primera vez lee además
+vuestras respuestas antiguas para aprender el estilo. Vuelve a pulsarlo
+pasados **5-10 minutos**: aparecerán las reseñas de los últimos 7 días y la
+pestaña **Ejemplos** se llenará con vuestras respuestas reales.
 
-1. **Reseñas → ▶ Buscar reseñas nuevas ahora**. Esto encarga la primera
-   lectura a Apify, que tarda unos minutos.
-2. Pasados **5-10 minutos**, pulsa otra vez **Buscar reseñas nuevas
-   ahora**. Aparecerán las reseñas de los últimos 7 días y se irán
-   redactando, hasta 25 por vez. El resto se redacta solo en las horas
-   siguientes.
+### Paso 9: Publicar la cola en el móvil
 
-A partir de aquí funciona solo: cada hora lee las reseñas nuevas de Google
-Maps y cada media hora las pasa a la hoja y redacta los borradores.
+1. En el editor de Apps Script: **Implementar → Nueva implementación**.
+2. Rueda ⚙ junto a "Seleccionar tipo" → **Aplicación web**.
+3. **Ejecutar como:** Yo. **Quién tiene acceso:** Solo yo.
+4. **Implementar** → copia la **URL de la aplicación web**.
+5. Ábrela en el móvil (con la cuenta `simsalabimgrupo` iniciada) y
+   **añádela a la pantalla de inicio** (Compartir → Añadir a pantalla de
+   inicio).
+
+El enlace también aparece en **Reseñas → 📱 Abrir la cola de respuestas**
+y en los correos.
+
+> **Si la cola dice "no se puede abrir el archivo":** suele pasar con varias
+> cuentas de Google iniciadas en el mismo navegador. Ábrela en una ventana
+> de incógnito con solo `simsalabimgrupo` iniciada.
+>
+> **Para que la use más gente del equipo:** en el paso 3, elige "Cualquier
+> persona con cuenta de Google". Quien tenga el enlace podrá usarla, así que
+> no lo compartáis fuera del equipo.
 
 ---
 
 ## Uso diario
 
-1. Abre la hoja cuando quieras. Las filas **Pendiente** ya tienen su
-   **Respuesta propuesta**.
-2. Copia la respuesta → pulsa **Abrir ↗** → en Google, **Responder** →
-   pega → **Publicar**.
-3. No hace falta marcar nada: en la siguiente lectura en la que vuelva a
-   aparecer esa reseña, la fila pasa a **Publicada ✔** sola. Si quieres, márcala tú en la
-   columna Estado.
+**Desde el móvil (lo recomendado):** abre la cola →
 
-**Colores:** rojo = negativa (a mano) · verde = publicada · amarillo =
-error de la IA · gris = descartada.
+- **Por publicar:** revisa el borrador (puedes editarlo) → **📋 Copiar y
+  abrir** → en Google o TripAdvisor, **Responder** → pega → **Publicar** →
+  vuelve y pulsa **✓ Publicada**.
+- **↻ Otra versión:** te pide una indicación opcional (*"más corta"*,
+  *"menciona la terraza"*).
+- **Revisar ⚠:** positivas que mencionan algo a mirar. El aviso explica
+  qué.
+- **Negativas:** **✍ Redactar borrador** → cuéntale qué pasó → revisa y
+  publica tú.
 
-**¿No te convence un borrador?** Escribe en la columna **Instrucción
-(->)** lo que quieras (por ejemplo, *menciona la música en directo de los
-viernes*), deja seleccionada esa fila y pulsa **Reseñas → ↻ Regenerar
-respuesta de la fila seleccionada**.
+**Desde la hoja:** misma información en columnas. Para regenerar, escribe
+en *Instrucción (->)*, selecciona la fila y pulsa **Reseñas → ↻ Regenerar**.
 
-**¿Una reseña que no queréis contestar?** Pon su Estado en
-**Descartada**.
+Colores: rojo = negativa · naranja = revisar · amarillo = error de IA · verde
+= publicada · gris = descartada.
+
+## Cómo aprende
+
+- **Pestaña Ejemplos:** respuestas reales vuestras que la IA usa como
+  referencia de estilo. Las que no os gusten, ponedlas en **No**.
+  - *Respuesta anterior:* respondidas antes del sistema o fuera de él.
+  - *Corregida por el equipo:* cambiasteis el borrador antes de publicar.
+    Son las que más pesan.
+- **Pestaña Prompt:** las normas de estilo que sigue la IA. Podéis editarlas
+  directamente. Si borráis la celda, vuelve a las originales.
+- **Reseñas → 🎓 Aprender de respuestas antiguas** vuelve a leer vuestras
+  respuestas pasadas cuando queráis.
+
+## Asistentes para lo que no es automático
+
+En la carpeta `asistentes/`:
+
+- **Gem de Gemini** (`GEM-GEMINI.md`): un asistente en la app de Gemini
+  conectado a esta hoja (keywords y ejemplos en vivo), para TripAdvisor a
+  mano, negativas o respuestas sueltas. Aquí sí aprovechas tu Gemini Plus.
+- **Skill de Claude** (`skill-claude/respuestas-resenas-unicum.zip`): lo
+  mismo dentro de Claude. Se sube en claude.ai → **Ajustes → Funciones →
+  Skills → Subir skill**. A partir de ahí, basta con pegar reseñas en
+  cualquier chat.
 
 ---
 
-## Costes
+## Costes y cupos
 
 | Servicio | Coste |
 |---|---|
-| Hoja y programa (Google Apps Script) | Gratis |
-| Redacción (Gemini, capa gratuita) | Gratis |
-| Lectura de reseñas (Apify) | 5 $/mes gratis. Cada lectura pide solo las reseñas nuevas y Apify cobra unos 0,30 $ por cada 1.000 leídas: con vuestro volumen son céntimos al mes, dentro de lo gratuito |
+| Hoja, programa y correos (Google) | Gratis |
+| Lectura de reseñas (Apify) | 5 $/mes gratis. Se paga por reseña leída y cada lectura pide solo lo nuevo; con vuestro volumen, unos 2-3 $/mes. Si el gasto se acerca a 4,5 $, el sistema reduce las lecturas y os avisa |
+| Redacción (Gemini API, capa gratuita) | Gratis |
 
-La primera semana, echa un vistazo a lo gastado en Apify (**Billing →
-Usage**) para confirmarlo. Apify no cobra nada
-si no añades tarjeta: como mucho, deja de leer hasta el mes siguiente.
+**Cupos gratuitos de Gemini:** el mejor modelo (Flash) solo da unas 20
+redacciones gratis al día. Por eso el sistema encadena modelos:
+
+1. **Gemini Flash** para las reseñas con texto, que es donde más se nota la
+   calidad;
+2. **Gemini Flash-Lite** (unas 500 al día) para las cortas o sin texto, y
+   cuando Flash se agota;
+3. **Gemma** como reserva.
+
+Si se agotan todos, lo pendiente se redacta en la siguiente vuelta.
+
+**Opción de pago, recomendable si os importa la calidad:** activando la
+facturación de la clave de Gemini en
+[aistudio.google.com](https://aistudio.google.com) → *Billing*, todas las
+respuestas pueden ir con Flash, sin límites diarios, por unos **2-4 € al
+mes** con vuestro volumen. La suscripción Gemini Plus no incluye uso de esta
+API: son productos distintos.
+
+**Primera semana:** mira el gasto en Apify (**Reseñas → 💶 Ver gasto de
+Apify**) para confirmar las cifras.
 
 ## Ajustes
 
-Al principio del programa (`Code.gs`), en el bloque `CONFIG`:
+Al principio de `Code.gs`, bloque `CONFIG`. Tras cambiar algo, guarda 💾:
 
-- `HORAS_ENTRE_LECTURAS` (1): cada cuánto se leen las reseñas nuevas. Se
-  puede poner `0.5` (media hora), pero no hará que aparezcan mucho antes,
-  porque la hoja se revisa cada media hora.
+- `HORAS_ENTRE_LECTURAS` (1) y `HORAS_ENTRE_LECTURAS_TRIPADVISOR` (12).
 - `DIAS_MAXIMOS` (7): antigüedad máxima de las reseñas que se apuntan.
-  Súbelo a 30 para recuperar reseñas antiguas sin contestar. Tardará unos
-  días en redactarlas todas por los límites gratuitos.
-- `MIN_ESTRELLAS_BORRADOR` (4): por debajo de esto no hay borrador.
+  Súbelo a 30 para recuperar reseñas antiguas sin contestar.
+- `MODELOS`: orden de modelos de IA. Con facturación activada, podéis dejar
+  solo `'gemini-flash-latest'`.
+- `EMAIL_AVISOS`: a quién llegan los correos. Vacío = la cuenta dueña de la
+  hoja; varios, separados por comas.
+- `AVISAR_NEGATIVAS` (true) y `RESUMEN_DIARIO_HORA` (10; 0 lo desactiva).
 
-Tras cambiar algo: guardar 💾. No hace falta reinstalar.
+## Si ya instalaste la versión 1
+
+1. En Apps Script, sustituye el contenido de `Código.gs` por el nuevo
+   `Code.gs`.
+2. Añade el archivo HTML `Cola` (paso 3).
+3. Pulsa **Reseñas → ⚙ Instalar / reparar**. Tu hoja antigua se guarda
+   como "Respuestas (v1)", se crea la nueva y a *Restaurantes* se le añade
+   la columna de TripAdvisor sin perder vuestros cambios.
+4. Sigue con los pasos 7 a 9.
 
 ## Limitaciones
 
-- **Publicar sigue siendo manual.** Sin la aprobación de Google no hay
-  forma segura de publicar automáticamente.
-- Lee la **información pública** de Google Maps (no la API oficial). No
-  entra en vuestra cuenta, así que las fichas no corren ningún riesgo. Si
-  Google cambia su web, Apify suele actualizar su lector en pocos días.
-- Una reseña tarda **alrededor de una hora** (como mucho, hora y media) en
-  aparecer en la hoja con su borrador.
-- **TripAdvisor no está incluido** todavía. Se puede añadir más adelante
-  con el lector de TripAdvisor de Apify.
-- Si aparece **"Error IA (regenerar)"**: selecciona la fila → Regenerar.
-  La nota de la celda explica el error.
+- **Publicar sigue siendo manual.** Sin la aprobación de Google (o con
+  TripAdvisor, que no lo permite nunca) no hay forma segura de publicar
+  automáticamente.
+- Lee la **información pública** de Google Maps y TripAdvisor. No entra en
+  vuestras cuentas, así que no corren ningún riesgo. Si alguna de esas webs
+  cambia, Apify suele actualizar su lector en pocos días. Mientras tanto,
+  os llega un aviso por correo.
+- Una reseña de Google tarda **alrededor de una hora** en aparecer, y las de
+  TripAdvisor hasta 12 h.
+- **"Error IA (regenerar)":** pulsa *Otra versión*. La nota de la celda
+  explica el motivo.
