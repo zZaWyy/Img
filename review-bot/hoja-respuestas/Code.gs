@@ -348,6 +348,7 @@ function onOpen() {
     .addItem('📥 Recuperar reseñas sin responder (último mes)', 'pedirRecuperacion')
     .addItem('📊 Enviar el informe semanal ahora', 'enviarInformeAhora')
     .addItem('🎓 Aprender de respuestas antiguas', 'pedirEjemplos')
+    .addItem('♻ Rehacer todos los borradores pendientes', 'rehacerBorradores')
     .addItem('💳 Gemini de pago: activar / desactivar', 'alternarGeminiPago')
     .addItem('💶 Ver gasto de Apify', 'mostrarGastoApify')
     .addItem('🔑 Cambiar claves', 'cambiarClaves')
@@ -437,6 +438,34 @@ function pedirEjemplos() {
 function pedirEjemplos_() {
   const props = PropertiesService.getScriptProperties();
   Object.keys(FUENTES).forEach(c => props.setProperty('ESTILO_PEDIDO_' + c, '1'));
+}
+
+/** Vacía los borradores sin publicar (sin indicación del equipo) para que se redacten con el prompt actual. */
+function rehacerBorradores() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.alert('Se borrarán los borradores pendientes (también los de negativas) y se volverán a redactar ' +
+    'con las instrucciones actuales en las próximas vueltas. Los que tienen una indicación "->" del equipo no se tocan. ' +
+    '¿Seguir?', ui.ButtonSet.YES_NO);
+  if (r !== ui.Button.YES) return;
+  const n = conBloqueo_(() => {
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    if (hoja.getLastRow() < 2) return 0;
+    let cuenta = 0;
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues().forEach((f, i) => {
+      const estado = f[COL.ESTADO - 1];
+      if ([ESTADO.PENDIENTE, ESTADO.REVISAR, ESTADO.MANO, ESTADO.ERROR].indexOf(estado) < 0) return;
+      if (!f[COL.RESPUESTA - 1] || f[COL.INSTRUCCION - 1]) return;
+      hoja.getRange(i + 2, COL.RESPUESTA).setValue('');
+      hoja.getRange(i + 2, COL.AVISO).setValue('');
+      hoja.getRange(i + 2, COL.MODELO).setValue('');
+      hoja.getRange(i + 2, COL.RESP_ES).setValue('');
+      if (estado !== ESTADO.MANO) hoja.getRange(i + 2, COL.ESTADO).setValue(ESTADO.PENDIENTE);
+      cuenta++;
+    });
+    return cuenta;
+  });
+  ui.alert(n + ' borradores se rehacen en las próximas vueltas (unos 25 cada media hora). ' +
+    'Para empezar ya: "Buscar reseñas nuevas ahora".');
 }
 
 function pedirRecuperacion() {
