@@ -435,7 +435,7 @@ function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
   const version = props.getProperty('VERSION');
-  if (version === '3.3') return;
+  if (version === '3.4') return;
   const antesDe = v => !version || Number(version) < v;
   if (antesDe(3)) pedirRecuperacion_();   // rescata las reseñas sin responder del último mes
   if (antesDe(3.1)) {
@@ -446,25 +446,48 @@ function migrarVersion_() {
     prepararHojaRespuestas_();   // columna "Respuesta en español"
     actualizarEnlacesResponder_();
   }
-  prepararHojaPublicadas_();
-  props.setProperty('VERSION', '3.3');
+  prepararHojaPublicadas_();     // 3.4: sin fórmula (fallaba en hojas en español)
+  props.setProperty('VERSION', '3.4');
 }
+
+const CABECERA_PUBLICADAS = ['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Reseña',
+  'Respuesta publicada', 'Borrador de la IA', 'Borrador en español'];
 
 /** Pestaña de solo lectura con las respuestas publicadas, de la más reciente a la más antigua. */
 function prepararHojaPublicadas_() {
   const hoja = hoja_(HOJA.PUBLICADAS, true);
-  hoja.getRange(1, 1, 1, 9).setValues([['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Reseña',
-    'Respuesta publicada', 'Borrador de la IA', 'Borrador en español']])
+  hoja.clearContents();
+  hoja.getRange(1, 1, 1, CABECERA_PUBLICADAS.length).setValues([CABECERA_PUBLICADAS])
     .setFontWeight('bold').setBackground('#1a7f37').setFontColor('#ffffff');
   hoja.setFrozenRows(1);
-  // Se rellena sola con lo que esté "Publicada ✔" en Respuestas: no hay que tocarla.
-  hoja.getRange(2, 1).setFormula('=IFERROR(SORT(CHOOSECOLS(FILTER(' + HOJA.RESPUESTAS + '!A2:Q, ' +
-    HOJA.RESPUESTAS + '!L2:L="' + ESTADO.PUBLICADA + '"), 1, 2, 3, 4, 5, 7, 14, 10, 17), 1, FALSE), ' +
-    '"Todavía no hay respuestas publicadas.")');
   [110, 90, 150, 140, 40, 320, 380, 320, 320].forEach((a, i) => hoja.setColumnWidth(i + 1, a));
   const filas = hoja.getMaxRows() - 1;
   hoja.getRange(2, 1, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
-  hoja.getRange(2, 1, filas, 9).setWrap(true).setVerticalAlignment('top');
+  hoja.getRange(2, 1, filas, CABECERA_PUBLICADAS.length).setWrap(true).setVerticalAlignment('top');
+  actualizarHojaPublicadas_();
+}
+
+/** Copia a "Publicadas" lo que está "Publicada ✔" en Respuestas. La escribe el programa: no hay que tocarla. */
+function actualizarHojaPublicadas_() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const destino = libro.getSheetByName(HOJA.PUBLICADAS);
+  const origen = libro.getSheetByName(HOJA.RESPUESTAS);
+  if (!destino || !origen) return;
+  const filas = origen.getLastRow() < 2 ? []
+    : origen.getRange(2, 1, origen.getLastRow() - 1, CABECERA.length).getValues()
+      .filter(f => f[COL.ESTADO - 1] === ESTADO.PUBLICADA)
+      .sort((a, b) => fecha_(b[COL.FECHA - 1]) - fecha_(a[COL.FECHA - 1]))
+      .map(f => [f[COL.FECHA - 1], f[COL.PLATAFORMA - 1], f[COL.RESTAURANTE - 1], f[COL.CLIENTE - 1],
+        f[COL.ESTRELLAS - 1], f[COL.RESENA - 1], f[COL.PUBLICADA - 1], f[COL.RESPUESTA - 1], f[COL.RESP_ES - 1]]);
+  const antes = destino.getLastRow();
+  if (antes > 1) destino.getRange(2, 1, antes - 1, CABECERA_PUBLICADAS.length).clearContent();
+  if (!filas.length) {
+    destino.getRange(2, 1).setValue('Todavía no hay respuestas publicadas.');
+    return;
+  }
+  const faltan = filas.length + 1 - destino.getMaxRows();
+  if (faltan > 0) destino.insertRowsAfter(destino.getMaxRows(), faltan);
+  destino.getRange(2, 1, filas.length, CABECERA_PUBLICADAS.length).setValues(filas);
 }
 
 /** Cambia los enlaces de las reseñas de Google abiertas por el de responder. */
@@ -546,6 +569,7 @@ function ciclo() {
   try { enviarInformeSiToca_(); } catch (e) { avisarError_('informe', 'No se pudo enviar el informe semanal: ' + (e.message || e)); }
   generarPendientes_(inicio);
   enviarResumenSiToca_();
+  try { conBloqueo_(actualizarHojaPublicadas_); } catch (e) { console.warn('publicadas: ' + e); }
 }
 
 /** Si la lectura lanzada antes ha terminado, pasa sus reseñas a la hoja. */
@@ -1247,6 +1271,7 @@ function colaAccion(id, accion, datos) {
     } else {
       throw new Error('Acción desconocida: ' + accion);
     }
+    actualizarHojaPublicadas_();
     return { ok: true };
   });
 }
