@@ -134,17 +134,20 @@ Gem de Gemini y Skill de Claude: ver la sección "Asistentes" más abajo.
 
 ## Uso diario
 
-**Desde el móvil (lo recomendado):** abre la cola →
+**Desde el móvil o el PC (lo recomendado):** abre la cola. Se ve todo al
+momento, sin pantallas de carga.
 
-- **Por publicar:** revisa el borrador (puedes editarlo) → **📋 Copiar y
-  abrir** → en Google o TripAdvisor, **Responder** → pega → **Publicar** →
-  vuelve y pulsa **✓ Publicada**.
-- **↻ Otra versión:** te pide una indicación opcional (*"más corta"*,
-  *"menciona la terraza"*).
-- **Revisar ⚠:** positivas que mencionan algo a mirar. El aviso explica
-  qué.
+- **Responder:** revisa el texto (puedes editarlo) → **📋 Copiar y abrir**
+  → en Google o TripAdvisor, pega y publica → vuelve y pulsa el mismo botón,
+  que ahora dice **✓ Ya está publicada**. Si te equivocas, **Deshacer**.
+  Las que tienen borde naranja mencionan algo a revisar: el aviso dice qué.
+- **↻ Otra versión:** la reescribe al momento. Para cambiar algo concreto,
+  edita el texto directamente.
 - **Negativas:** lee el borrador con calma. Si sabes qué pasó, **✍ Otro
   borrador** → cuéntaselo → revisa y publica tú.
+- **Publicadas:** lo respondido en los últimos 60 días.
+- Arriba: filtro **Todas · Google · TripAdvisor**, filtro por local, **↻**
+  para actualizar y un enlace a todas las reseñas en el panel de Google.
 
 **Desde la hoja:** misma información en columnas. Para regenerar, escribe
 en *Instrucción (->)*, selecciona la fila y pulsa **Reseñas → ↻ Regenerar**.

@@ -1290,7 +1290,16 @@ function idiomaDistinto_(idiomaResena, respuesta) {
 // ================================================================== cola móvil
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Cola')
+  // Los datos van dentro de la página: se ve todo al abrir, sin una segunda espera.
+  const pagina = HtmlService.createTemplateFromFile('Cola');
+  let datos;
+  try {
+    datos = colaDatos();
+  } catch (e) {
+    datos = JSON.stringify({ resenas: [], error: String(e.message || e) });
+  }
+  pagina.datosIniciales = datos.replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  return pagina.evaluate()
     .setTitle('Respuestas · Unicum')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }

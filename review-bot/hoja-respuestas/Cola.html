@@ -7,92 +7,100 @@
 <style>
   :root {
     --bg: #f4f1ec; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e4dfd6;
-    --accent: #1f3a5f; --accent-text: #ffffff; --ok: #1e7b4c; --warn-bg: #fff4dc; --warn: #8a5a00;
-    --bad-bg: #fde8ea; --bad: #a3242f; --chip: #ebe6dd;
+    --accent: #1f3a5f; --accent-text: #ffffff; --ok: #1e7b4c; --ok-text: #ffffff; --warn-bg: #fff4dc; --warn: #8a5a00;
+    --bad: #a3242f; --chip: #ebe6dd;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #141416; --card: #1f1f22; --text: #f1f1f3; --muted: #a1a1a8; --line: #2e2e33;
-      --accent: #8fb3e0; --accent-text: #0e1a2b; --ok: #5ccf94; --warn-bg: #3a2e12; --warn: #f2c66d;
-      --bad-bg: #3b1a1e; --bad: #ff8c96; --chip: #2a2a2f;
+      --accent: #8fb3e0; --accent-text: #0e1a2b; --ok: #5ccf94; --ok-text: #0b2417; --warn-bg: #3a2e12; --warn: #f2c66d;
+      --bad: #ff8c96; --chip: #2a2a2f;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 12px 16px 8px;
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 16px 8px;
     border-bottom: 1px solid var(--line); }
-  h1 { font-size: 18px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
-  .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tab { border: 0; background: var(--chip); color: var(--text); padding: 7px 12px; border-radius: 999px;
+  .fila { display: flex; gap: 6px; align-items: center; }
+  .fila + .fila { margin-top: 8px; }
+  .tab { flex: 1; border: 0; background: var(--chip); color: var(--text); padding: 8px 6px; border-radius: 999px;
     font-size: 14px; white-space: nowrap; cursor: pointer; }
-  .tab.on { background: var(--accent); color: var(--accent-text); }
-  .filtros { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-  .plataformas { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .plataformas button { flex: 1; border: 0; background: var(--card); color: var(--text); padding: 0 10px; font-size: 14px;
-    cursor: pointer; min-height: 38px; }
-  .plataformas button + button { border-left: 1px solid var(--line); }
-  .plataformas button.on { background: var(--accent); color: var(--accent-text); }
-  .filtros select { margin-top: 0; }
-  select { margin-top: 8px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--card); color: var(--text); font-size: 15px; }
-  main { padding: 12px 16px 80px; max-width: 760px; margin: 0 auto; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
-    margin-bottom: 12px; transition: opacity .25s, transform .25s; }
-  .card.fuera { opacity: 0; transform: translateX(30px); }
-  .meta { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .tab.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  #recargar { flex: none; width: 38px; height: 36px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--card); color: var(--text); font-size: 17px; cursor: pointer; }
+  .seg { display: flex; flex: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: var(--card); color: var(--text); padding: 0 8px; font-size: 13px;
+    min-height: 36px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+  select { flex: 1; min-width: 0; height: 38px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 14px; }
+  main { padding: 12px 16px 90px; max-width: 760px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .card.neg { border-left: 4px solid var(--bad); }
+  .card.rev { border-left: 4px solid var(--warn); }
+  .meta { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
   .meta b { color: var(--text); font-size: 15px; }
-  .stars { color: #d69e2e; letter-spacing: 1px; }
-  .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); }
-  .resena { margin: 10px 0 6px; white-space: pre-wrap; }
+  .stars { color: #d69e2e; }
+  .resena { margin: 8px 0 4px; white-space: pre-wrap; }
   .vacia { color: var(--muted); font-style: italic; }
-  details { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
-  .publicada { margin: 4px 0 10px; padding: 10px 12px; border-left: 3px solid var(--ok);
-    background: var(--chip); border-radius: 8px; white-space: pre-wrap; }
-  .es { font-size: 14px; color: var(--muted); margin: -2px 0 8px; white-space: pre-wrap; }
-  .es b { font-weight: 600; }
-  .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px;
-    font-size: 14px; margin: 8px 0; }
-  textarea { width: 100%; min-height: 110px; border: 1px solid var(--line); border-radius: 10px;
-    padding: 10px; font: inherit; background: var(--bg); color: var(--text); resize: vertical; }
-  .botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  button.b { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px;
+  .trad, .es { font-size: 14px; color: var(--muted); white-space: pre-wrap; margin: 0 0 8px; }
+  .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin: 8px 0; }
+  textarea { display: block; width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+    font: inherit; background: var(--bg); color: var(--text); resize: vertical; field-sizing: content; min-height: 4.5em; margin: 6px 0; }
+  .publicada { margin: 6px 0; padding: 10px 12px; border-left: 3px solid var(--ok); background: var(--chip);
+    border-radius: 8px; white-space: pre-wrap; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .acciones button { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px;
     padding: 10px 12px; font-size: 15px; cursor: pointer; }
-  button.prim { background: var(--accent); color: var(--accent-text); border-color: var(--accent); flex: 1 1 100%; font-weight: 600; }
-  button.ok { color: var(--ok); }
-  button:disabled { opacity: .5; }
-  .negativa { border-left: 4px solid var(--bad); }
-  .estado { color: var(--bad); font-weight: 600; font-size: 13px; }
-  .vacio-lista { text-align: center; color: var(--muted); padding: 40px 0; }
-  #toast { position: fixed; left: 16px; right: 16px; bottom: 16px; background: var(--text); color: var(--bg);
-    padding: 12px 14px; border-radius: 12px; font-size: 15px; display: none; z-index: 5; text-align: center; }
-  a { color: var(--accent); }
+  .acciones .prim { flex: 1 1 100%; background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+    font-weight: 600; padding: 13px; font-size: 16px; }
+  .acciones .prim.hecho { background: var(--ok); border-color: var(--ok); color: var(--ok-text); }
+  .acciones .sec { flex: 1; }
+  button:disabled { opacity: .55; }
+  .nota { color: var(--bad); font-size: 13px; font-weight: 600; }
+  .panel { display: block; text-align: center; padding: 10px; margin: 0 0 12px; border: 1px dashed var(--line);
+    border-radius: 10px; color: var(--accent); text-decoration: none; font-size: 15px; font-weight: 600; }
+  .vacio { text-align: center; color: var(--muted); padding: 40px 0; }
+  #toast { position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 728px; margin: 0 auto; background: var(--text);
+    color: var(--bg); padding: 10px 12px 10px 14px; border-radius: 12px; font-size: 15px; display: none; z-index: 5;
+    align-items: center; gap: 10px; }
+  #toast span { flex: 1; }
+  #toast button { border: 0; background: transparent; color: var(--bg); font: inherit; font-weight: 700;
+    text-decoration: underline; cursor: pointer; padding: 4px; }
 </style>
 </head>
 <body>
 <header>
-  <h1><span>Respuestas · Unicum</span><button class="b" id="recargar" title="Recargar">↻</button></h1>
-  <div class="tabs" id="tabs"></div>
-  <div class="filtros">
-    <div class="plataformas" id="plataformas" role="group" aria-label="Plataforma"></div>
-    <select id="filtro"><option value="">Todos los locales</option></select>
+  <div class="fila" id="tabs"></div>
+  <div class="fila">
+    <div class="seg" id="plataformas" role="group" aria-label="Plataforma"></div>
+    <select id="local" aria-label="Local"></select>
   </div>
 </header>
-<main id="lista"><p class="vacio-lista">Cargando…</p></main>
-<div id="toast"></div>
+<main id="lista"></main>
+<div id="toast" role="status"><span></span></div>
 
 <script>
-  const TABS = [
-    { clave: 'listas', nombre: 'Por publicar', estados: ['Pendiente', 'Error IA (regenerar)'] },
-    { clave: 'revisar', nombre: 'Revisar ⚠', estados: ['Revisar ⚠'] },
-    { clave: 'negativas', nombre: 'Negativas', estados: ['A mano (negativa)'] },
-    { clave: 'publicadas', nombre: 'Publicadas ✔', estados: ['Publicada ✔'] },
+  // Los datos llegan dentro de la propia página: se ve todo al momento, sin "Cargando".
+  const INICIAL = <?!= datosIniciales ?>;
+
+  const PESTANAS = [
+    { id: 'responder', nombre: 'Responder', estados: ['Pendiente', 'Revisar ⚠', 'Error IA (regenerar)'] },
+    { id: 'negativas', nombre: 'Negativas', estados: ['A mano (negativa)'] },
+    { id: 'publicadas', nombre: 'Publicadas', estados: ['Publicada ✔'] },
   ];
-  let datos = [];
-  let tab = 'listas';
-  const PLATAFORMAS = [{ v: '', n: 'Ambas' }, { v: 'Google', n: 'Google' }, { v: 'TripAdvisor', n: 'TripAdvisor' }];
-  let plataforma = '';
-  try { plataforma = localStorage.getItem('plataforma') || ''; } catch (e) { /* sin almacenamiento */ }
+  const PLATAFORMAS = [['', 'Todas'], ['Google', 'Google'], ['TripAdvisor', 'TripAdvisor']];
+  const ESPERA_MAXIMA = 20000;
+  const PANEL_GOOGLE = 'https://business.google.com/u/3/reviews?hl=es'; // todas las reseñas de Google, con su botón Responder
+
+  let datos = (INICIAL && INICIAL.resenas) || [];
+  const guardado = k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
+  const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
+  let pestana = guardado('pestana') || 'responder';
+  let plataforma = guardado('plataforma');
+  let local = '';
 
   const $ = id => document.getElementById(id);
   const el = (tag, cls, texto) => {
@@ -101,253 +109,225 @@
     if (texto !== undefined) e.textContent = texto; // nunca innerHTML con texto de reseñas
     return e;
   };
+  const boton = (texto, cls, fn) => { const b = el('button', cls, texto); b.type = 'button'; b.onclick = fn; return b; };
 
-  function toast(msg, ms) {
-    const t = $('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
-    clearTimeout(t._h);
-    t._h = setTimeout(() => { t.style.display = 'none'; }, ms || 3500);
-  }
-
-  function cargar() {
-    $('lista').replaceChildren(el('p', 'vacio-lista', 'Cargando…'));
+  // ------------------------------------------------------------- servidor
+  // Llamada con tope de tiempo: con varias cuentas de Google abiertas, google.script.run se pierde sin avisar.
+  function llamar(fn, args, ok, ko) {
     let hecho = false;
-    const fallo = texto => {
-      if (hecho) return;
-      hecho = true;
-      const b = el('button', 'b prim', '↻ Reintentar');
-      b.addEventListener('click', cargar);
-      $('lista').replaceChildren(el('p', 'vacio-lista', texto), b);
-    };
-    // Con varias cuentas de Google abiertas, la llamada se pierde sin dar error.
-    const espera = setTimeout(() => fallo('No termina de cargar. Suele pasar al tener varias cuentas de ' +
-      'Google abiertas en el navegador: abre este enlace en una ventana de incógnito e inicia sesión ' +
-      'solo con la cuenta que tenga acceso.'), 20000);
+    const t = setTimeout(() => { if (!hecho) { hecho = true; ko(new Error('sin respuesta (¿varias cuentas de Google abiertas?)')); } }, ESPERA_MAXIMA);
     google.script.run
-      .withSuccessHandler(r => {
-        clearTimeout(espera);
-        try { if (typeof r === 'string') r = JSON.parse(r); } catch (e) { r = null; }
-        if (!r || !r.resenas) return fallo('La hoja no devolvió datos. Reintenta en un momento.');
-        hecho = true;
-        datos = r.resenas; pintarFiltro(); pintar();
-      })
-      .withFailureHandler(e => { clearTimeout(espera); fallo('Error: ' + e.message); })
-      .colaDatos();
+      .withSuccessHandler(r => { if (hecho) return; hecho = true; clearTimeout(t); ok(r); })
+      .withFailureHandler(e => { if (hecho) return; hecho = true; clearTimeout(t); ko(e); })[fn](...args);
   }
 
-  function enTab(r, clave) {
-    return TABS.find(t => t.clave === clave).estados.indexOf(r.estado) >= 0;
+  function recargar() {
+    const b = $('recargar');
+    b.disabled = true;
+    llamar('colaDatos', [], r => {
+      b.disabled = false;
+      try { r = typeof r === 'string' ? JSON.parse(r) : r; } catch (e) { r = null; }
+      if (!r || !r.resenas) return aviso('La hoja no devolvió datos. Prueba otra vez.');
+      datos = r.resenas;
+      pintar();
+    }, e => { b.disabled = false; aviso('No se pudo actualizar: ' + e.message); });
   }
 
-  function pintarFiltro() {
-    const sel = $('filtro');
-    const actual = sel.value;
-    const locales = [...new Set(datos.map(r => r.restaurante))].sort();
-    sel.replaceChildren(el('option', '', 'Todos los locales'));
-    sel.options[0].value = '';
-    locales.forEach(l => { const o = el('option', '', l); o.value = l; sel.appendChild(o); });
-    sel.value = locales.indexOf(actual) >= 0 ? actual : '';
-  }
-
-  function pintarPlataformas() {
-    const caja = $('plataformas');
-    caja.replaceChildren();
-    PLATAFORMAS.forEach(p => {
-      const n = datos.filter(r => !p.v || r.plataforma === p.v).length;
-      const b = el('button', p.v === plataforma ? 'on' : '', p.n);
-      b.title = n + ' reseñas';
-      b.setAttribute('aria-pressed', p.v === plataforma ? 'true' : 'false');
-      b.onclick = () => {
-        plataforma = p.v;
-        try { localStorage.setItem('plataforma', plataforma); } catch (e) { /* sin almacenamiento */ }
-        pintar();
-      };
-      caja.appendChild(b);
+  // Cambio de estado al instante; si el servidor falla, se deshace y se avisa.
+  function cambiar(r, accion, texto, estadoNuevo, mensaje, conDeshacer) {
+    const antes = { estado: r.estado, publicada: r.publicada };
+    const restaurar = () => { r.estado = antes.estado; r.publicada = antes.publicada; pintar(); };
+    r.estado = estadoNuevo;
+    if (accion === 'publicada') r.publicada = texto;
+    pintar();
+    let enCurso = true, deshacerAlTerminar = false;
+    const reabrir = () => llamar('colaAccion', [r.id, 'reabrir', {}], () => {}, e => aviso('No se pudo deshacer: ' + e.message));
+    aviso(mensaje, conDeshacer ? () => {
+      restaurar();
+      if (enCurso) deshacerAlTerminar = true; else reabrir(); // en orden: primero el cambio, luego deshacerlo
+    } : null);
+    llamar('colaAccion', [r.id, accion, { texto: texto }], () => {
+      enCurso = false;
+      if (deshacerAlTerminar) reabrir();
+    }, e => {
+      enCurso = false;
+      if (!deshacerAlTerminar) restaurar();
+      aviso('No se guardó: ' + e.message);
     });
+  }
+
+  function redactar(r, b, instruccion) {
+    const texto = b.textContent;
+    b.disabled = true;
+    b.textContent = 'Redactando…';
+    llamar('colaAccion', [r.id, 'regenerar', { instruccion: instruccion || '' }], s => {
+      r.respuesta = s.respuesta;
+      r.respuestaEs = s.respuestaEs || '';
+      r.aviso = s.aviso || '';
+      r.copiada = false;
+      if (r.estado === 'Error IA (regenerar)') r.estado = 'Pendiente';
+      pintar();
+    }, e => { b.disabled = false; b.textContent = texto; aviso('Error: ' + e.message); });
+  }
+
+  // ------------------------------------------------------------- pintar
+  function visibles() {
+    return datos.filter(r => (!plataforma || r.plataforma === plataforma) && (!local || r.restaurante === local));
   }
 
   function pintar() {
-    pintarPlataformas();
-    const filtro = $('filtro').value;
-    const visibles = datos.filter(r => (!filtro || r.restaurante === filtro) && (!plataforma || r.plataforma === plataforma));
+    const lista = visibles();
+    const enPestana = id => lista.filter(r => PESTANAS.find(p => p.id === id).estados.indexOf(r.estado) >= 0);
+
     const tabs = $('tabs');
     tabs.replaceChildren();
-    TABS.forEach(t => {
-      const n = visibles.filter(r => enTab(r, t.clave)).length;
-      const b = el('button', 'tab' + (t.clave === tab ? ' on' : ''), t.nombre + ' (' + n + ')');
-      b.onclick = () => { tab = t.clave; pintar(); };
-      tabs.appendChild(b);
-    });
-    const lista = $('lista');
-    const items = visibles.filter(r => enTab(r, tab));
-    lista.replaceChildren();
+    PESTANAS.forEach(p => tabs.appendChild(boton(p.nombre + ' ' + enPestana(p.id).length,
+      'tab' + (p.id === pestana ? ' on' : ''), () => { pestana = p.id; guardar('pestana', pestana); pintar(); scrollTo(0, 0); })));
+    const rec = boton('↻', '', recargar);
+    rec.id = 'recargar';
+    rec.title = 'Actualizar';
+    tabs.appendChild(rec);
+
+    const seg = $('plataformas');
+    seg.replaceChildren();
+    PLATAFORMAS.forEach(([v, n]) => seg.appendChild(boton(n, v === plataforma ? 'on' : '',
+      () => { plataforma = v; guardar('plataforma', v); pintar(); })));
+
+    const sel = $('local');
+    const locales = [...new Set(datos.map(r => r.restaurante))].sort();
+    if (locales.indexOf(local) < 0) local = '';
+    sel.replaceChildren(el('option', '', 'Todos los locales'));
+    sel.options[0].value = '';
+    locales.forEach(l => { const o = el('option', '', l); o.value = l; sel.appendChild(o); });
+    sel.value = local;
+
+    const items = enPestana(pestana);
+    const main = $('lista');
+    const frag = document.createDocumentFragment();
+    const panel = el('a', 'panel', 'Abrir todas las reseñas en Google ↗');
+    panel.href = PANEL_GOOGLE;
+    panel.target = '_blank';
+    panel.rel = 'noopener';
+    frag.appendChild(panel);
     if (!items.length) {
-      lista.appendChild(el('p', 'vacio-lista', tab === 'listas' ? '¡Todo respondido! 🎉'
-        : tab === 'publicadas' ? 'Aquí aparecen las publicadas de los últimos 60 días.' : 'Nada por aquí.'));
-      return;
+      frag.appendChild(el('p', 'vacio', pestana === 'publicadas' ? 'Aquí verás lo publicado en los últimos 60 días.'
+        : pestana === 'negativas' ? 'Ninguna negativa pendiente 🙌' : 'Todo respondido 🎉'));
     }
-    items.forEach(r => lista.appendChild(tarjeta(r)));
+    items.forEach(r => frag.appendChild(pestana === 'publicadas' ? tarjetaPublicada(r) : tarjeta(r)));
+    main.replaceChildren(frag);
+  }
+
+  function cabecera(c, r) {
+    const meta = el('div', 'meta');
+    meta.appendChild(el('b', '', r.restaurante));
+    meta.appendChild(el('span', 'stars', '★'.repeat(Math.max(0, r.estrellas)) + '☆'.repeat(Math.max(0, 5 - r.estrellas))));
+    meta.appendChild(el('span', '', r.cliente));
+    meta.appendChild(el('span', '', [r.plataforma, hace(r.fecha)].filter(Boolean).join(' · ')));
+    c.appendChild(meta);
+    c.appendChild(el('div', 'resena' + (r.resena ? '' : ' vacia'), r.resena || 'Solo puntuación, sin texto.'));
+    if (r.traduccion) c.appendChild(el('div', 'trad', '🇪🇸 ' + r.traduccion));
   }
 
   function tarjeta(r) {
-    if (r.estado === 'Publicada ✔') return tarjetaPublicada(r);
     const negativa = r.estado === 'A mano (negativa)';
-    const c = el('article', 'card' + (negativa ? ' negativa' : ''));
-    c.appendChild(cabecera(r));
-    if (r.estado === 'Error IA (regenerar)') c.appendChild(el('div', 'estado', 'La IA falló: pulsa “Otra versión”.'));
-
-    c.appendChild(el('div', 'resena' + (r.resena ? '' : ' vacia'), r.resena || 'Solo puntuación, sin texto.'));
-    if (r.traduccion) {
-      const d = el('details');
-      d.appendChild(el('summary', '', 'Traducción'));
-      d.appendChild(el('div', '', r.traduccion));
-      c.appendChild(d);
-    }
+    const c = el('article', 'card' + (negativa ? ' neg' : r.aviso ? ' rev' : ''));
+    cabecera(c, r);
+    if (r.estado === 'Error IA (regenerar)') c.appendChild(el('div', 'nota', 'La IA no pudo redactarla: pulsa "Otra versión".'));
     if (r.aviso) c.appendChild(el('div', 'aviso', '⚠ ' + r.aviso));
 
-    const ta = el('textarea');
-    ta.value = r.respuesta || '';
-    ta.placeholder = negativa ? 'Pulsa “Redactar borrador” y cuenta qué pasó, o escribe tu respuesta.' : '';
-    if (negativa && !r.respuesta) ta.style.display = 'none';
-    c.appendChild(ta);
-    const es = el('div', 'es');
-    const pintarEs = texto => {
-      es.replaceChildren(el('b', '', '🇪🇸 En español: '), document.createTextNode(texto || ''));
-      es.style.display = texto ? '' : 'none';
-    };
-    pintarEs(r.respuestaEs);
-    ta.addEventListener('input', () => { if (r.respuestaEs) es.style.opacity = '.5'; });
-    c.appendChild(es);
-
-    const bot = el('div', 'botones');
-    const accion = (nombre, fn) => { const b = el('button', 'b', nombre); b.onclick = () => fn(b); bot.appendChild(b); return b; };
-
-    const copiar = el('button', 'b prim', r.url ? '📋 Copiar y abrir' : '📋 Copiar');
-    copiar.onclick = () => copiarYAbrir(r, ta);
-    if (!negativa || r.respuesta) bot.appendChild(copiar);
-    if (negativa) {
-      accion(r.respuesta ? '✍ Otro borrador' : '✍ Redactar borrador', b => regenerar(r, ta, b, true, copiar, bot, pintarEs));
-      if (!r.respuesta && r.url) accion('Abrir reseña ↗', () => window.open(r.url, '_blank'));
+    const acciones = el('div', 'acciones');
+    if (negativa && !r.respuesta) {
+      acciones.appendChild(boton('✍ Redactar borrador', 'prim', e => pedirContexto(r, e.currentTarget)));
     } else {
-      accion('↻ Otra versión', b => regenerar(r, ta, b, false, null, null, pintarEs));
+      const ta = el('textarea');
+      ta.value = r.respuesta || '';
+      ta.rows = Math.max(3, Math.ceil(ta.value.length / 42));
+      c.appendChild(ta);
+      const es = el('div', 'es', r.respuestaEs ? '🇪🇸 ' + r.respuestaEs : '');
+      if (r.respuestaEs) c.appendChild(es);
+      ta.oninput = () => { r.respuesta = ta.value; es.style.opacity = '.45'; };
+
+      const prim = boton('', 'prim', () => {
+        if (!r.copiada) {
+          copiar(ta.value);
+          r.copiada = true;
+          if (r.url) window.open(r.url, '_blank');
+          ponerPrim();
+          aviso('Copiada ✔ Pégala en ' + r.plataforma + ' y vuelve a pulsar aquí cuando esté publicada.');
+        } else {
+          cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Publicada ✔', true);
+        }
+      });
+      const ponerPrim = () => {
+        prim.textContent = r.copiada ? '✓ Ya está publicada' : (r.url ? '📋 Copiar y abrir' : '📋 Copiar');
+        prim.className = 'prim' + (r.copiada ? ' hecho' : '');
+      };
+      ponerPrim();
+      acciones.appendChild(prim);
+      if (r.copiada) acciones.appendChild(boton('📋 Copiar otra vez', 'sec', () => { copiar(ta.value); aviso('Copiada ✔'); }));
+      acciones.appendChild(negativa
+        ? boton('✍ Otro borrador', 'sec', e => pedirContexto(r, e.currentTarget))
+        : boton('↻ Otra versión', 'sec', e => redactar(r, e.currentTarget, '')));
     }
-    accion('✓ Publicada', b => marcar(r, c, 'publicada', ta.value, b)).classList.add('ok');
-    accion('✕ Descartar', b => marcar(r, c, 'descartar', '', b));
-    c.appendChild(bot);
+    acciones.appendChild(boton('Descartar', 'sec', () => cambiar(r, 'descartar', '', 'Descartada', 'Descartada', true)));
+    c.appendChild(acciones);
     return c;
   }
 
-  function copiarYAbrir(r, ta) {
-    let ok = false;
-    try {
-      ta.focus();
-      ta.select();
-      ta.setSelectionRange(0, ta.value.length);
-      ok = document.execCommand('copy');
-    } catch (e) { ok = false; }
-    if (!ok && navigator.clipboard) {
-      navigator.clipboard.writeText(ta.value).catch(() => {});
-      ok = true;
-    }
-    if (r.url) window.open(r.url, '_blank');
-    toast(ok ? 'Copiada ✔ Pégala en ' + r.plataforma + ' y vuelve para marcar “Publicada”.'
-             : 'No se pudo copiar sola: mantén pulsado el texto para copiarlo.', 5000);
-  }
-
-  function regenerar(r, ta, boton, negativa, copiar, bot, pintarEs) {
-    const instruccion = prompt(negativa
-      ? '¿Qué pasó o qué quieres transmitir? (la IA lo usará para el borrador)'
-      : 'Indicación opcional para la nueva versión (p. ej. “menciona la música en directo”). Déjalo vacío para otra versión sin más.', '');
-    if (instruccion === null) return;
-    boton.disabled = true;
-    const texto = boton.textContent;
-    boton.textContent = 'Redactando…';
-    google.script.run
-      .withSuccessHandler(s => {
-        ta.value = s.respuesta;
-        ta.style.display = '';
-        r.respuesta = s.respuesta;
-        r.respuestaEs = s.respuestaEs || '';
-        if (pintarEs) pintarEs(r.respuestaEs);
-        if (negativa && copiar && !copiar.parentNode) bot.insertBefore(copiar, bot.firstChild);
-        boton.disabled = false;
-        boton.textContent = negativa ? '✍ Otro borrador' : texto;
-        if (s.aviso) toast('⚠ ' + s.aviso, 5000);
-      })
-      .withFailureHandler(e => { boton.disabled = false; boton.textContent = texto; toast('Error: ' + e.message, 5000); })
-      .colaAccion(r.id, 'regenerar', { instruccion: instruccion });
-  }
-
-  function cabecera(r) {
-    const meta = el('div', 'meta');
-    meta.appendChild(el('b', '', r.restaurante));
-    meta.appendChild(el('span', 'badge', r.plataforma));
-    meta.appendChild(el('span', 'stars', '★'.repeat(Math.max(0, r.estrellas)) + '☆'.repeat(Math.max(0, 5 - r.estrellas))));
-    meta.appendChild(el('span', '', r.cliente));
-    meta.appendChild(el('span', '', hace(r.fecha) + (r.idioma ? ' · ' + r.idioma : '')));
-    return meta;
-  }
-
-  // Solo lectura: lo que se publicó, para consultarlo o devolverlo a la cola.
   function tarjetaPublicada(r) {
     const c = el('article', 'card');
-    c.appendChild(cabecera(r));
-    c.appendChild(el('div', 'resena' + (r.resena ? '' : ' vacia'), r.resena || 'Solo puntuación, sin texto.'));
-    if (r.traduccion) {
-      const d = el('details');
-      d.appendChild(el('summary', '', 'Traducción'));
-      d.appendChild(el('div', '', r.traduccion));
-      c.appendChild(d);
-    }
-    c.appendChild(el('div', 'publicada', r.publicada || r.respuesta || '(Publicada fuera de la cola; aún no se ha leído el texto.)'));
-    if (r.respuestaEs && !r.publicada) {
-      const es = el('div', 'es');
-      es.replaceChildren(el('b', '', '🇪🇸 En español: '), document.createTextNode(r.respuestaEs));
-      c.appendChild(es);
-    }
-    const bot = el('div', 'botones');
-    if (r.url) {
-      const ver = el('button', 'b', 'Ver ↗');
-      ver.onclick = () => window.open(r.url, '_blank');
-      bot.appendChild(ver);
-    }
-    const reabrir = el('button', 'b', '↩ Devolver a pendientes');
-    reabrir.onclick = () => {
-      reabrir.disabled = true;
-      google.script.run
-        .withSuccessHandler(() => {
-          r.estado = r.estrellas < 4 ? 'A mano (negativa)' : 'Pendiente';
-          pintar();
-          toast('Devuelta a la cola', 2500);
-        })
-        .withFailureHandler(e => { reabrir.disabled = false; toast('Error: ' + e.message, 5000); })
-        .colaAccion(r.id, 'reabrir', {});
-    };
-    bot.appendChild(reabrir);
-    c.appendChild(bot);
+    cabecera(c, r);
+    c.appendChild(el('div', 'publicada', r.publicada || r.respuesta || 'Publicada fuera de la cola.'));
+    const acciones = el('div', 'acciones');
+    if (r.url) acciones.appendChild(boton('Ver ↗', 'sec', () => window.open(r.url, '_blank')));
+    acciones.appendChild(boton('↩ Devolver a pendientes', 'sec', () => {
+      const estado = r.estrellas < 4 ? 'A mano (negativa)' : 'Pendiente';
+      r.copiada = false;
+      cambiar(r, 'reabrir', '', estado, 'Devuelta a pendientes');
+    }));
+    c.appendChild(acciones);
     return c;
   }
 
-  function marcar(r, card, accion, texto, boton) {
-    boton.disabled = true;
-    google.script.run
-      .withSuccessHandler(() => {
-        card.classList.add('fuera');
-        setTimeout(() => {
-          if (accion === 'publicada') { r.estado = 'Publicada ✔'; r.publicada = texto; }
-          else datos = datos.filter(x => x.id !== r.id);
-          pintar();
-        }, 250);
-        toast(accion === 'publicada' ? 'Marcada como publicada ✔' : 'Descartada', 2500);
-      })
-      .withFailureHandler(e => { boton.disabled = false; toast('Error: ' + e.message, 5000); })
-      .colaAccion(r.id, accion, { texto: texto });
+  function pedirContexto(r, b) {
+    const instruccion = prompt('¿Qué pasó o qué quieres transmitir? (opcional)', '');
+    if (instruccion !== null) redactar(r, b, instruccion);
+  }
+
+  // ------------------------------------------------------------- utilidades
+  function copiar(texto) {
+    // Copia sin enfocar el cuadro (en el móvil, enfocarlo abre el teclado).
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).catch(() => copiarAntiguo(texto));
+    } else {
+      copiarAntiguo(texto);
+    }
+  }
+  function copiarAntiguo(texto) {
+    const t = el('textarea');
+    t.value = texto;
+    t.setAttribute('readonly', '');
+    t.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    document.body.appendChild(t);
+    t.select();
+    t.setSelectionRange(0, texto.length);
+    try { document.execCommand('copy'); } catch (e) { /* sin portapapeles */ }
+    t.remove();
+  }
+
+  let temporizador;
+  function aviso(texto, deshacer) {
+    const t = $('toast');
+    t.firstChild.textContent = texto;
+    while (t.childNodes.length > 1) t.lastChild.remove();
+    if (deshacer) t.appendChild(boton('Deshacer', '', () => { t.style.display = 'none'; deshacer(); }));
+    t.style.display = 'flex';
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => { t.style.display = 'none'; }, deshacer ? 5000 : 3500);
   }
 
   function hace(iso) {
-    const ms = Date.now() - new Date(iso).getTime();
-    const h = Math.round(ms / 3600000);
+    const h = Math.round((Date.now() - new Date(iso).getTime()) / 3600000);
     if (isNaN(h)) return '';
     if (h < 1) return 'hace un rato';
     if (h < 24) return 'hace ' + h + ' h';
@@ -355,9 +335,9 @@
     return 'hace ' + d + (d === 1 ? ' día' : ' días');
   }
 
-  $('filtro').onchange = pintar;
-  $('recargar').onclick = cargar;
-  cargar();
+  $('local').onchange = e => { local = e.target.value; pintar(); };
+  pintar();
+  if (INICIAL && INICIAL.error) aviso('Error al leer la hoja: ' + INICIAL.error);
 </script>
 </body>
 </html>
