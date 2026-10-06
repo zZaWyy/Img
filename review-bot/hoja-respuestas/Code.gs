@@ -140,7 +140,45 @@ const RESTAURANTES_INICIALES = [
     'restaurante italiano, pizza napolitana, pasta casera, tiramisú, cocina italiana tradicional, Plaza Patines, abierto todo el año', ''],
 ];
 
-const PROMPT_POR_DEFECTO = `Eres la persona del equipo de Unicum Group (Mallorca) que responde las reseñas de Google y TripAdvisor de sus restaurantes en Santa Ponsa y Palma.
+const PROMPT_POR_DEFECTO = `Respondes, en nombre del equipo, las reseñas de Google y TripAdvisor de los restaurantes de Unicum Group en Santa Ponsa y Palma (Mallorca). Escribes como una persona del equipo: cercana, natural y concreta. El objetivo: que el cliente note que alguien ha leído de verdad su reseña y que quien la lea después tenga ganas de venir.
+
+IDIOMA Y TRATO
+- Responde siempre en el idioma de la reseña. Sin texto: en el idioma que sugiera el nombre solo si es muy claro; si dudas, en español.
+- Adapta el trato al del cliente: en español, tú o vosotros; si escribe en plural ("fuimos", "we"), responde en plural. En alemán, francés y neerlandés, usa la forma de cortesía salvo que el cliente tutee.
+- Usa el nombre de pila si parece un nombre real; si es un alias o unas iniciales, no lo uses.
+
+LONGITUD
+- Respeta la longitud máxima que se indica con cada reseña: es lo más importante. Mejor corta y concreta que larga y genérica.
+- Nunca más larga que la propia reseña, salvo en reseñas sin texto o de pocas palabras.
+
+POSITIVAS
+- Recoge uno o dos detalles concretos de la reseña (un plato, una persona, un momento). Si nombra a alguien del equipo, di que se lo haréis llegar.
+- Agradece con naturalidad, sin fórmulas. Invita a volver solo si queda natural y varía la forma de hacerlo.
+- Keywords: como mucho una, y solo si el cliente habla de ese tema (si menciona la paella, puedes decir "paella"). No añadas temas que no ha mencionado (vistas, terraza, cocina mediterránea…). Si respondes en otro idioma, tradúcela.
+- Emojis: como mucho uno, y solo si la reseña es entusiasta.
+- Si una reseña positiva menciona algún problema, reconócelo en una frase, sin excusas.
+
+NEGATIVAS (1-3★): borrador que el equipo revisará antes de publicar
+- Agradece en pocas palabras que lo cuente, reconoce lo concreto que falló y discúlpate sin excusas ni "pero".
+- Si elogia algo, reconócelo en media frase.
+- Di que lo compartís con el equipo para revisarlo, sin inventar medidas concretas.
+- Invita a hablarlo en privado con el contacto que aparezca en las notas del local; si no hay ninguno, pide que contacte directamente con el restaurante.
+- No discutas los hechos. Si la acusación es grave (higiene, intoxicación, cobros, robo), no la repitas palabra por palabra: reconoce la preocupación en términos generales.
+- Tono sereno: sin emojis ni exclamaciones.
+
+EVITA
+- Inventar algo que no esté en la reseña o en las notas: datos, promesas, nombres, correos, teléfonos o webs.
+- Empezar con fórmulas gastadas: "Da gusto leer", "¡Qué alegría leer esto!", "¡Muchas gracias por tu reseña/valoración!", "Nos alegra mucho", "Thank you so much for your review", "We're thrilled/delighted", ni sus equivalentes en otros idiomas.
+- Muletillas: "a la altura", "experiencia inolvidable", "un montón", "de diez", "no tiene precio".
+- Rayas largas (—), enumeraciones de tres adjetivos y más de dos signos de exclamación.
+- Firmar o poner comillas: la plataforma ya muestra el nombre del restaurante.
+
+DIRECTIVAS: una línea que empieza por "->" es una indicación del equipo y manda sobre todo lo anterior.
+
+Devuelve solo el texto a publicar.`;
+
+/** Prompt de las versiones 2-3.4: si la hoja aún lo tiene sin cambios, se sustituye por el nuevo. */
+const PROMPT_V3 = `Eres la persona del equipo de Unicum Group (Mallorca) que responde las reseñas de Google y TripAdvisor de sus restaurantes en Santa Ponsa y Palma.
 
 Lineamientos obligatorios:
 - Tono cercano, cálido e informal: una conversación humana, nunca corporativa.
@@ -164,7 +202,10 @@ Si aparece una línea que empieza por "->", es una directiva interna del equipo 
 
 La respuesta debe ser solo el texto a publicar: sin comillas, sin explicaciones y sin firma (la plataforma ya muestra el nombre del restaurante).`;
 
-const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA. Redacta un BORRADOR para que el equipo lo revise antes de publicarlo: agradece la opinión, lamenta lo ocurrido sin excusas ni discusiones, no inventes hechos ni prometas compensaciones (salvo que la directiva "->" lo indique), apóyate en lo que explique la directiva sobre lo sucedido e invita a contactar en privado. Si no hay directiva, no supongas causas ni des explicaciones: recoge lo concreto que cuenta el cliente, discúlpate por ello y ofrece hablarlo en privado. Si la reseña también elogia algo, agradécelo brevemente. Tono humano y sereno; sin emojis.';
+const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA: es un borrador que el equipo revisará. Reconoce lo concreto que falló y discúlpate sin excusas, no inventes hechos, causas ni compensaciones (salvo que la directiva "->" lo indique; si explica lo sucedido, apóyate en ella), reconoce brevemente lo que elogie e invita a hablarlo en privado con el contacto de las notas del local o, si no hay, directamente con el restaurante. Tono sereno, sin emojis ni exclamaciones.';
+
+/** Arranques de plantilla: los ejemplos que empiezan así pesan menos al elegir el estilo. */
+const APERTURA_GASTADA = /^\W*(muchas gracias|mil gracias|muchísimas gracias|gracias por (tu|su|vuestra) (reseña|valoración|opinión)|thank you( so much| very much)?( for (your|the))?|thanks (so much )?for|vielen (lieben )?dank|merci beaucoup|grazie mille|da gusto leer|qué alegría leer)/i;
 
 const ESQUEMA_RESPUESTA = {
   type: 'OBJECT',
@@ -435,7 +476,7 @@ function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
   const version = props.getProperty('VERSION');
-  if (version === '3.4') return;
+  if (version === '3.5') return;
   const antesDe = v => !version || Number(version) < v;
   if (antesDe(3)) pedirRecuperacion_();   // rescata las reseñas sin responder del último mes
   if (antesDe(3.1)) {
@@ -446,8 +487,18 @@ function migrarVersion_() {
     prepararHojaRespuestas_();   // columna "Respuesta en español"
     actualizarEnlacesResponder_();
   }
-  prepararHojaPublicadas_();     // 3.4: sin fórmula (fallaba en hojas en español)
-  props.setProperty('VERSION', '3.4');
+  if (antesDe(3.4)) prepararHojaPublicadas_();   // sin fórmula (fallaba en hojas en español)
+  actualizarPromptSiNoSeToco_();
+  props.setProperty('VERSION', '3.5');
+}
+
+/** Pone el prompt nuevo en la pestaña Prompt, solo si nadie había cambiado el anterior. */
+function actualizarPromptSiNoSeToco_() {
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.PROMPT);
+  if (!hoja) return;
+  const actual = String(hoja.getRange(2, 1).getValue() || '').trim();
+  if (actual && actual !== PROMPT_V3.trim()) return; // editado por el equipo: se respeta
+  hoja.getRange(2, 1).setValue(PROMPT_POR_DEFECTO);
 }
 
 const CABECERA_PUBLICADAS = ['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Reseña',
@@ -898,8 +949,8 @@ function redactar_(fila, contexto, instruccion, manual) {
   p.push('Plataforma: ' + fila[COL.PLATAFORMA - 1]);
   p.push('Restaurante: ' + rest.nombre + (rest.ciudad ? ' (' + rest.ciudad + ')' : ''));
   if (rest.keywords) {
-    p.push('Keywords disponibles (usar 1-2 como máximo y solo si encajan; están en español: si respondes en ' +
-      'otro idioma, tradúcelas): ' + rest.keywords);
+    p.push('Keywords del local (como mucho una, solo si el cliente habla de ese tema; tradúcela si respondes ' +
+      'en otro idioma): ' + rest.keywords);
   }
   if (rest.notas) p.push('Notas del equipo: ' + rest.notas);
 
@@ -924,6 +975,7 @@ function redactar_(fila, contexto, instruccion, manual) {
   p.push('Cliente: ' + fila[COL.CLIENTE - 1]);
   p.push('Puntuación: ' + estrellas + ' estrellas');
   p.push(texto ? 'Reseña:\n' + texto : 'Reseña: (sin texto, solo puntuación)');
+  p.push('\nLongitud máxima de la respuesta: ' + palabrasObjetivo_(texto, estrellas) + ' palabras.');
   const lengua = texto && idioma ? nombreIdioma_(idioma) : '';
   if (lengua) {
     p.push('\nIdioma de la reseña: ' + lengua + '. Escribe la respuesta en ' + lengua +
@@ -950,6 +1002,13 @@ function redactar_(fila, contexto, instruccion, manual) {
   salida.aviso = (salida.aviso ? salida.aviso + ' ' : '') + 'La respuesta no parece estar en ' + lengua +
     ': revísala o pide otra versión.';
   return salida;
+}
+
+/** Tope de palabras según lo que escribió el cliente (las respuestas salían el doble de largas que la reseña). */
+function palabrasObjetivo_(texto, estrellas) {
+  const n = String(texto || '').split(/\s+/).filter(Boolean).length;
+  const tope = !n ? 20 : n < 15 ? 30 : n < 40 ? 45 : n < 90 ? 65 : 90;
+  return estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR ? Math.max(tope, 55) : tope;
 }
 
 const NOMBRES_IDIOMA = {
@@ -1105,7 +1164,8 @@ function leerEjemplos_() {
 /** Prioriza ejemplos del mismo local, corregidos por el equipo y del mismo idioma. */
 function elegirEjemplos_(ejemplos, restaurante, idioma) {
   const puntuar = e => (e.restaurante === restaurante ? 4 : 0) + (e.corregida ? 2 : 0) +
-    (idioma && e.idioma === idioma ? 1 : 0) + Math.random();
+    (idioma && e.idioma === idioma ? 1 : 0) - (APERTURA_GASTADA.test(e.respuesta) ? 3 : 0) -
+    (String(e.respuesta).length > 450 ? 1 : 0) + Math.random();
   const propios = ejemplos.filter(e => e.restaurante === restaurante);
   const candidatos = propios.length >= 2 ? propios
     : ejemplos.filter(e => e.restaurante === restaurante || !idioma || e.idioma === idioma);

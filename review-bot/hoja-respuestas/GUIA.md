@@ -92,6 +92,12 @@ TripAdvisor y comprueba que abren el local correcto. Si alguno falla, pega
 la dirección buena. Aquí se cambian también **keywords y notas**, o se
 desactiva un local (Activo = No).
 
+**Contacto para quejas:** en *Notas*, añade el correo o teléfono al que
+pueden escribir los clientes descontentos (por ejemplo, `Contacto para
+quejas: reservas@…`). Las respuestas a negativas lo usarán; si no hay
+ninguno, invitan a contactar directamente con el restaurante. La IA nunca
+se inventa un contacto.
+
 ### Paso 5: Primera lectura
 
 **Reseñas → ▶ Buscar reseñas nuevas ahora.** La primera vez lee además
