@@ -952,7 +952,15 @@ function llamarIA_(sistema, usuario, desde, esquema) {
   for (const modelo of modelos) {
     if (modeloEnPausa_(modelo)) continue;
     try {
-      const salida = llamarModelo_(modelo, sistema, usuario, esquema);
+      let salida;
+      try {
+        salida = llamarModelo_(modelo, sistema, usuario, esquema);
+      } catch (e) {
+        // "Mucha demanda" (503) suele durar segundos: un reintento antes de pasar al modelo ligero.
+        if (e.tipo !== 'temporal') throw e;
+        Utilities.sleep(4000);
+        salida = llamarModelo_(modelo, sistema, usuario, esquema);
+      }
       salida.modelo = modelo;
       return salida;
     } catch (e) {
@@ -963,7 +971,7 @@ function llamarIA_(sistema, usuario, desde, esquema) {
         ULTIMO_ERROR_IA_MS: String(Date.now()),
       });
       if (e.tipo === 'cuota') { pausarModelo_(modelo, e.diaria ? 3 * HORA : 2 * MIN); continue; }
-      if (e.tipo === 'temporal') { pausarModelo_(modelo, 5 * MIN); continue; }
+      if (e.tipo === 'temporal') { pausarModelo_(modelo, 2 * MIN); continue; }
       if (e.tipo === 'vacio') continue; // respuesta vacía o mal formada: probar el siguiente
       if (e.tipo === 'roto') {
         pausarModelo_(modelo, DIA);
