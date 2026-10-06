@@ -56,7 +56,6 @@
     padding: 10px 12px; font-size: 15px; cursor: pointer; }
   .acciones .prim { flex: 1 1 100%; background: var(--accent); color: var(--accent-text); border-color: var(--accent);
     font-weight: 600; padding: 13px; font-size: 16px; }
-  .acciones .prim.hecho { background: var(--ok); border-color: var(--ok); color: var(--ok-text); }
   .acciones .sec { flex: 1; }
   button:disabled { opacity: .55; }
   .nota { color: var(--bad); font-size: 13px; font-weight: 600; }
@@ -164,7 +163,6 @@
       r.respuesta = s.respuesta;
       r.respuestaEs = s.respuestaEs || '';
       r.aviso = s.aviso || '';
-      r.copiada = false;
       if (r.estado === 'Error IA (regenerar)') r.estado = 'Pendiente';
       pintar();
     }, e => { b.disabled = false; b.textContent = texto; aviso('Error: ' + e.message); });
@@ -247,24 +245,12 @@
       if (r.respuestaEs) c.appendChild(es);
       ta.oninput = () => { r.respuesta = ta.value; es.style.opacity = '.45'; };
 
-      const prim = boton('', 'prim', () => {
-        if (!r.copiada) {
-          copiar(ta.value);
-          r.copiada = true;
-          if (r.url) window.open(r.url, '_blank');
-          ponerPrim();
-          aviso('Copiada ✔ Pégala en ' + r.plataforma + ' y vuelve a pulsar aquí cuando esté publicada.');
-        } else {
-          cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Publicada ✔', true);
-        }
-      });
-      const ponerPrim = () => {
-        prim.textContent = r.copiada ? '✓ Ya está publicada' : (r.url ? '📋 Copiar y abrir' : '📋 Copiar');
-        prim.className = 'prim' + (r.copiada ? ' hecho' : '');
-      };
-      ponerPrim();
-      acciones.appendChild(prim);
-      if (r.copiada) acciones.appendChild(boton('📋 Copiar otra vez', 'sec', () => { copiar(ta.value); aviso('Copiada ✔'); }));
+      // Un solo toque: copia, abre la reseña y la pasa a Publicadas (con Deshacer, y "Devolver" en Publicadas).
+      acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'prim', () => {
+        copiar(ta.value);
+        if (r.url) window.open(r.url, '_blank');
+        cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
+      }));
       acciones.appendChild(negativa
         ? boton('✍ Otro borrador', 'sec', e => pedirContexto(r, e.currentTarget))
         : boton('↻ Otra versión', 'sec', e => redactar(r, e.currentTarget, '')));
@@ -279,10 +265,13 @@
     cabecera(c, r);
     c.appendChild(el('div', 'publicada', r.publicada || r.respuesta || 'Publicada fuera de la cola.'));
     const acciones = el('div', 'acciones');
-    if (r.url) acciones.appendChild(boton('Ver ↗', 'sec', () => window.open(r.url, '_blank')));
+    acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'sec', () => {
+      copiar(r.publicada || r.respuesta || '');
+      if (r.url) window.open(r.url, '_blank');
+      aviso('Copiada ✔');
+    }));
     acciones.appendChild(boton('↩ Devolver a pendientes', 'sec', () => {
       const estado = r.estrellas < 4 ? 'A mano (negativa)' : 'Pendiente';
-      r.copiada = false;
       cambiar(r, 'reabrir', '', estado, 'Devuelta a pendientes');
     }));
     c.appendChild(acciones);

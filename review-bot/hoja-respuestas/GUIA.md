@@ -138,8 +138,9 @@ Gem de Gemini y Skill de Claude: ver la sección "Asistentes" más abajo.
 momento, sin pantallas de carga.
 
 - **Responder:** revisa el texto (puedes editarlo) → **📋 Copiar y abrir**
-  → en Google o TripAdvisor, pega y publica → vuelve y pulsa el mismo botón,
-  que ahora dice **✓ Ya está publicada**. Si te equivocas, **Deshacer**.
+  → en Google o TripAdvisor, pega y publica. Al pulsar el botón, la reseña
+  pasa sola a *Publicadas*. Si al final no la publicas, **Deshacer** o, en
+  *Publicadas*, **↩ Devolver a pendientes**.
   Las que tienen borde naranja mencionan algo a revisar: el aviso dice qué.
 - **↻ Otra versión:** la reescribe al momento. Para cambiar algo concreto,
   edita el texto directamente.
