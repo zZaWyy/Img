@@ -27,6 +27,13 @@
   .tab { border: 0; background: var(--chip); color: var(--text); padding: 7px 12px; border-radius: 999px;
     font-size: 14px; white-space: nowrap; cursor: pointer; }
   .tab.on { background: var(--accent); color: var(--accent-text); }
+  .filtros { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .plataformas { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .plataformas button { flex: 1; border: 0; background: var(--card); color: var(--text); padding: 0 10px; font-size: 14px;
+    cursor: pointer; min-height: 38px; }
+  .plataformas button + button { border-left: 1px solid var(--line); }
+  .plataformas button.on { background: var(--accent); color: var(--accent-text); }
+  .filtros select { margin-top: 0; }
   select { margin-top: 8px; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--line);
     background: var(--card); color: var(--text); font-size: 15px; }
   main { padding: 12px 16px 80px; max-width: 760px; margin: 0 auto; }
@@ -66,7 +73,10 @@
 <header>
   <h1><span>Respuestas · Unicum</span><button class="b" id="recargar" title="Recargar">↻</button></h1>
   <div class="tabs" id="tabs"></div>
-  <select id="filtro"><option value="">Todos los locales</option></select>
+  <div class="filtros">
+    <div class="plataformas" id="plataformas" role="group" aria-label="Plataforma"></div>
+    <select id="filtro"><option value="">Todos los locales</option></select>
+  </div>
 </header>
 <main id="lista"><p class="vacio-lista">Cargando…</p></main>
 <div id="toast"></div>
@@ -80,6 +90,9 @@
   ];
   let datos = [];
   let tab = 'listas';
+  const PLATAFORMAS = [{ v: '', n: 'Ambas' }, { v: 'Google', n: 'Google' }, { v: 'TripAdvisor', n: 'TripAdvisor' }];
+  let plataforma = '';
+  try { plataforma = localStorage.getItem('plataforma') || ''; } catch (e) { /* sin almacenamiento */ }
 
   const $ = id => document.getElementById(id);
   const el = (tag, cls, texto) => {
@@ -137,9 +150,27 @@
     sel.value = locales.indexOf(actual) >= 0 ? actual : '';
   }
 
+  function pintarPlataformas() {
+    const caja = $('plataformas');
+    caja.replaceChildren();
+    PLATAFORMAS.forEach(p => {
+      const n = datos.filter(r => !p.v || r.plataforma === p.v).length;
+      const b = el('button', p.v === plataforma ? 'on' : '', p.n);
+      b.title = n + ' reseñas';
+      b.setAttribute('aria-pressed', p.v === plataforma ? 'true' : 'false');
+      b.onclick = () => {
+        plataforma = p.v;
+        try { localStorage.setItem('plataforma', plataforma); } catch (e) { /* sin almacenamiento */ }
+        pintar();
+      };
+      caja.appendChild(b);
+    });
+  }
+
   function pintar() {
+    pintarPlataformas();
     const filtro = $('filtro').value;
-    const visibles = datos.filter(r => !filtro || r.restaurante === filtro);
+    const visibles = datos.filter(r => (!filtro || r.restaurante === filtro) && (!plataforma || r.plataforma === plataforma));
     const tabs = $('tabs');
     tabs.replaceChildren();
     TABS.forEach(t => {
