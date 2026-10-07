@@ -198,6 +198,51 @@ Colores: rojo = negativa · naranja = revisar · amarillo = error de IA · verde
 - **Reseñas → 🎓 Aprender de respuestas antiguas** vuelve a leer vuestras
   respuestas pasadas cuando queráis.
 
+## Publicación automática en Google (opcional, gratis)
+
+Las respuestas de Google pueden publicarse solas, dentro de un horario, a
+través de **Make**: una herramienta de automatizaciones que tiene el acceso
+oficial de Google para responder reseñas. TripAdvisor no lo permite: esas
+siguen con *Copiar y abrir*.
+
+**Qué se publica solo:** reseñas de Google de 4-5★, sin avisos, cuya
+respuesta está en el idioma correcto, entre las **10:00 y las 21:00** y al
+menos **2 horas** después de la reseña. Salen 3 cada media hora, de la más
+antigua a la más reciente. Las negativas y las de borde naranja nunca salen
+solas. En la cola, las de Google tienen además el botón **Publicar en
+Google** para publicarlas al momento. Horario y condiciones: `PUBLICAR_*`,
+`HORAS_DESDE_RESENA` y `MIN_ESTRELLAS_AUTO` en *Ajustes*.
+
+**Montarlo (unos 15 minutos, una sola vez):**
+
+1. [make.com](https://www.make.com) → **Sign up** con `simsalabimgrupo`
+   (plan Free: 1.000 operaciones al mes; cada respuesta gasta 2-3).
+2. **Create a new scenario** → **＋** → **Webhooks → Custom webhook** →
+   **Add** → nombre `Reseñas Unicum` → **Save**. Copia la dirección
+   (`https://hook.eu1.make.com/…`).
+3. Pulsa **Run once** (abajo). Ahora, en la hoja: **Reseñas → 🤖
+   Publicación automática en Google** → pega la dirección. La hoja envía una
+   muestra y Make aprende los campos (*Successfully determined*).
+4. En Make, **＋** después del webhook → **Google My Business → Create/Update
+   a Review Reply** → **Create a connection** con `simsalabimgrupo` y acepta
+   los permisos.
+   - En *Review*, elige con los desplegables cualquier cuenta, local y
+     reseña. Activa **Map** (el interruptor junto al campo): verás algo como
+     `accounts/123…/locations/456…/reviews/xyz…`.
+   - Deja `accounts/123…/locations/` tal cual y sustituye el resto por los
+     campos del webhook: `accounts/123…/locations/{{ubicacion}}/reviews/{{reviewId}}`
+     (arrastra *ubicacion* y *reviewId* desde la lista).
+   - En *Reply comment*, arrastra **respuesta**.
+5. **＋** → **Webhooks → Webhook response** → *Status* `200`, *Body*
+   `{"ok":true}`.
+6. Guarda 💾, activa el escenario (interruptor **ON**) y, en el reloj del
+   escenario, elige **Immediately**.
+7. Prueba: en la cola, en una reseña de Google, pulsa **Publicar en Google**
+   y comprueba en Google que aparece la respuesta.
+
+Si Make falla, la reseña vuelve a la cola y llega un correo con el motivo.
+Para desactivarlo: **Reseñas → 🤖 Publicación automática en Google**.
+
 ## Compartir la cola con el equipo
 
 Dos formas; elegid una.

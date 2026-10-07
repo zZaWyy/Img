@@ -66,6 +66,14 @@ const CONFIG = {
   // Aviso si hay reseñas esperando borrador y la IA lleva este tiempo sin
   // redactar ninguno (cupo agotado, clave caducada…).
   HORAS_SIN_BORRADORES_AVISO: 6,
+
+  // --- Publicación automática en Google (vía Make; ver GUIA.md) ---
+  // Solo positivas de Google, sin avisos, y solo dentro de este horario de Madrid.
+  PUBLICAR_DESDE_HORA: 10,
+  PUBLICAR_HASTA_HORA: 21,               // no se publica a partir de esta hora
+  HORAS_DESDE_RESENA: 2,                 // nunca antes de este tiempo desde que se escribió la reseña
+  PUBLICACIONES_POR_VUELTA: 3,           // cada media hora: así se reparten durante el día
+  MIN_ESTRELLAS_AUTO: 4,
 };
 
 const ZONA = 'Europe/Madrid';
@@ -96,6 +104,7 @@ const ESTADO = {
   PUBLICADA: 'Publicada ✔',
   DESCARTADA: 'Descartada',
   ERROR: 'Error IA (regenerar)',
+  ENVIADA: 'Enviada a Google ⏳',     // la envió la publicación automática; se confirma al leerla publicada
 };
 const ESTADOS_ABIERTOS = [ESTADO.PENDIENTE, ESTADO.REVISAR, ESTADO.MANO, ESTADO.ERROR];
 
@@ -350,6 +359,7 @@ function onOpen() {
     .addItem('🎓 Aprender de respuestas antiguas', 'pedirEjemplos')
     .addItem('♻ Rehacer todos los borradores pendientes', 'rehacerBorradores')
     .addItem('💳 Gemini de pago: activar / desactivar', 'alternarGeminiPago')
+    .addItem('🤖 Publicación automática en Google', 'configurarPublicacion')
     .addItem('💶 Ver gasto de Apify', 'mostrarGastoApify')
     .addItem('🔑 Cambiar claves', 'cambiarClaves')
     .addItem('⚙ Instalar / reparar', 'instalar')
@@ -560,7 +570,7 @@ function actualizarHojaPublicadas_() {
   if (!destino || !origen) return;
   const filas = origen.getLastRow() < 2 ? []
     : origen.getRange(2, 1, origen.getLastRow() - 1, CABECERA.length).getValues()
-      .filter(f => f[COL.ESTADO - 1] === ESTADO.PUBLICADA)
+      .filter(f => f[COL.ESTADO - 1] === ESTADO.PUBLICADA || f[COL.ESTADO - 1] === ESTADO.ENVIADA)
       .sort((a, b) => fecha_(b[COL.FECHA - 1]) - fecha_(a[COL.FECHA - 1]))
       .map(f => [f[COL.FECHA - 1], f[COL.PLATAFORMA - 1], f[COL.RESTAURANTE - 1], f[COL.CLIENTE - 1],
         f[COL.ESTRELLAS - 1], f[COL.RESENA - 1], f[COL.PUBLICADA - 1], f[COL.RESPUESTA - 1], f[COL.RESP_ES - 1]]);
@@ -653,6 +663,7 @@ function ciclo() {
   // El informe va antes que los borradores: es una sola llamada a la IA y así no se queda sin tiempo.
   try { enviarInformeSiToca_(); } catch (e) { avisarError_('informe', 'No se pudo enviar el informe semanal: ' + (e.message || e)); }
   generarPendientes_(inicio);
+  try { publicarAutomaticas_(); } catch (e) { avisarError_('publicar', 'Fallo en la publicación automática: ' + (e.message || e)); }
   enviarResumenSiToca_();
   try { conBloqueo_(actualizarHojaPublicadas_); } catch (e) { console.warn('publicadas: ' + e); }
 }
@@ -1292,6 +1303,135 @@ function idiomaDistinto_(idiomaResena, respuesta) {
 }
 
 
+// ===================================================== publicación automática
+
+/**
+ * Las respuestas se publican en Google a través de un escenario de Make
+ * (Make tiene el acceso oficial a la API de Google Business Profile). La hoja
+ * le envía cada respuesta a su webhook; Make la publica y contesta {"ok":true}.
+ * Ver GUIA.md → "Publicación automática en Google".
+ */
+function publicacionActiva_() {
+  return Boolean(PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK'));
+}
+
+function configurarPublicacion() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('MAKE_WEBHOOK')) {
+    const r = ui.alert('La publicación automática está ACTIVADA (Google, de ' + CONFIG.PUBLICAR_DESDE_HORA + ':00 a ' +
+      CONFIG.PUBLICAR_HASTA_HORA + ':00, positivas sin avisos).\n\n¿Quieres desactivarla?', ui.ButtonSet.YES_NO);
+    if (r === ui.Button.YES) {
+      props.deleteProperty('MAKE_WEBHOOK');
+      ui.alert('Desactivada. Las respuestas vuelven a publicarse a mano desde la cola.');
+    }
+    return;
+  }
+  const r = ui.prompt('Publicación automática en Google',
+    'Pega la dirección del webhook de tu escenario de Make (empieza por https://hook.):', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const url = r.getResponseText().trim();
+  if (!/^https:\/\/hook\.[a-z0-9.-]*make\.com\/\S+$/.test(url)) {
+    ui.alert('Esa dirección no parece un webhook de Make (https://hook.….make.com/…). Revísala.');
+    return;
+  }
+  // Muestra para que Make aprenda los campos (en Make: "Run once" antes de pegar la dirección).
+  try {
+    UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ prueba: true, reviewId: 'PRUEBA', ubicacion: '0', restaurante: 'Prueba',
+        cliente: 'Prueba', estrellas: 5, resena: 'Prueba', fecha: new Date().toISOString(), respuesta: 'Prueba' }) });
+  } catch (e) { /* solo es una muestra */ }
+  props.setProperty('MAKE_WEBHOOK', url);
+  ui.alert('Activada ✔ Las positivas de Google sin avisos se publicarán solas de ' + CONFIG.PUBLICAR_DESDE_HORA +
+    ':00 a ' + CONFIG.PUBLICAR_HASTA_HORA + ':00, como mínimo ' + CONFIG.HORAS_DESDE_RESENA + ' h después de la reseña. ' +
+    'Las negativas, las de "Revisar" y las de TripAdvisor siguen siendo a mano.');
+}
+
+/** ¿Se puede publicar sola? Positiva de Google, con respuesta en su idioma y sin avisos. */
+function publicableSola_(f, ahora) {
+  if (f[COL.PLATAFORMA - 1] !== 'Google' || f[COL.ESTADO - 1] !== ESTADO.PENDIENTE) return false;
+  if (!f[COL.RESPUESTA - 1] || f[COL.AVISO - 1]) return false;
+  if (Number(f[COL.ESTRELLAS - 1]) < CONFIG.MIN_ESTRELLAS_AUTO) return false;
+  if (fecha_(f[COL.FECHA - 1]).getTime() > ahora - CONFIG.HORAS_DESDE_RESENA * HORA) return false;
+  return !idiomaDistinto_(f[COL.IDIOMA - 1], f[COL.RESPUESTA - 1]);
+}
+
+function enHorarioDePublicacion_(fecha) {
+  const h = Number(Utilities.formatDate(fecha, ZONA, 'H'));
+  return h >= CONFIG.PUBLICAR_DESDE_HORA && h < CONFIG.PUBLICAR_HASTA_HORA;
+}
+
+/** En cada vuelta, dentro del horario, publica unas pocas (de la más antigua a la más reciente). */
+function publicarAutomaticas_() {
+  if (!publicacionActiva_() || !enHorarioDePublicacion_(new Date())) return;
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  if (hoja.getLastRow() < 2) return;
+  const ahora = Date.now();
+  const candidatas = hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues()
+    .filter(f => publicableSola_(f, ahora))
+    .reverse()   // la hoja va de más reciente a más antigua
+    .slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
+  for (const f of candidatas) {
+    try {
+      publicarFila_(f[COL.ID - 1], f[COL.RESPUESTA - 1]);
+    } catch (e) {
+      avisarError_('publicar', 'No se pudo publicar en Google la respuesta a ' + f[COL.CLIENTE - 1] + ' (' +
+        f[COL.RESTAURANTE - 1] + '): ' + (e.message || e) + '. Se reintentará en la siguiente vuelta.');
+      return; // si Make falla, no seguir insistiendo en esta vuelta
+    }
+  }
+}
+
+/** Envía una respuesta a Make y deja la fila como publicada (o enviada). Devuelve el estado nuevo. */
+function publicarFila_(id, texto) {
+  const url = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK');
+  if (!url) throw new Error('La publicación automática no está configurada (menú Reseñas → Publicación automática).');
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const n = filaPorId_(hoja, id);
+  if (!n) throw new Error('Esa reseña ya no está en la hoja.');
+  const f = hoja.getRange(n, 1, 1, CABECERA.length).getValues()[0];
+  if (f[COL.PLATAFORMA - 1] !== 'Google') throw new Error('Solo se puede publicar automáticamente en Google.');
+  const respuesta = String(texto || f[COL.RESPUESTA - 1] || '').trim();
+  if (!respuesta) throw new Error('No hay respuesta que publicar.');
+  const rest = buscarRestaurantePorNombre_(leerRestaurantes_(), f[COL.RESTAURANTE - 1]);
+  const cid = (rest && rest.cid) || '';
+  const res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    payload: JSON.stringify({
+      reviewId: String(id).replace(/^g:/, ''),
+      ubicacion: NEGOCIO_GOOGLE[cid] || '',
+      restaurante: f[COL.RESTAURANTE - 1],
+      cliente: f[COL.CLIENTE - 1],
+      estrellas: Number(f[COL.ESTRELLAS - 1]),
+      resena: f[COL.RESENA - 1],
+      fecha: fecha_(f[COL.FECHA - 1]).toISOString(),
+      respuesta: respuesta,
+    }),
+  });
+  const codigo = res.getResponseCode();
+  const cuerpo = res.getContentText();
+  if (codigo >= 300) throw new Error('Make respondió ' + codigo + ': ' + cuerpo.slice(0, 200));
+  // Solo cuenta como publicada si Make lo confirma (módulo "Webhook response" con {"ok":true}).
+  // "Accepted" significa que Make la recibió pero el escenario está apagado o incompleto.
+  if (!/"ok"\s*:\s*true/.test(cuerpo)) {
+    throw new Error('Make la recibió pero no confirmó la publicación. Revisa que el escenario esté activado y ' +
+      'termine con el módulo "Webhook response" (cuerpo {"ok":true}).');
+  }
+  const estado = ESTADO.PUBLICADA;
+  conBloqueo_(() => {
+    const m = filaPorId_(hoja, id);
+    if (!m) return;
+    hoja.getRange(m, COL.ESTADO).setValue(estado);
+    hoja.getRange(m, COL.PUBLICADA).setValue(respuesta);
+    hoja.getRange(m, COL.ESTADO).setNote('Publicada automáticamente el ' +
+      Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm'));
+  });
+  return estado;
+}
+
+
 // ================================================================== cola móvil
 
 function doGet() {
@@ -1322,7 +1462,7 @@ function colaDatos() {
     .slice(0, 300)
     .concat(filas
       .map((f, i) => ({ f: f, url: (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '' }))
-      .filter(x => x.f[COL.ESTADO - 1] === ESTADO.PUBLICADA &&
+      .filter(x => (x.f[COL.ESTADO - 1] === ESTADO.PUBLICADA || x.f[COL.ESTADO - 1] === ESTADO.ENVIADA) &&
         fecha_(x.f[COL.FECHA - 1]).getTime() > Date.now() - 60 * DIA)
       .slice(0, 150))
     .map(({ f, url }) => ({
@@ -1343,13 +1483,16 @@ function colaDatos() {
       publicada: f[COL.PUBLICADA - 1],
     }));
   // Como texto JSON: si alguna celda es una fecha u otro tipo raro, google.script.run devolvería null.
-  return JSON.stringify({ resenas: resenas, hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+  return JSON.stringify({ resenas: resenas, hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl(),
+    auto: publicacionActiva_() ? { desde: CONFIG.PUBLICAR_DESDE_HORA, hasta: CONFIG.PUBLICAR_HASTA_HORA,
+      minEstrellas: CONFIG.MIN_ESTRELLAS_AUTO } : null });
 }
 
 /** Acciones desde la cola: publicada, descartar, regenerar, reabrir. */
 function colaAccion(id, accion, datos) {
   datos = datos || {};
   if (accion === 'rehacerTodo') return { cuantos: vaciarBorradores_() };
+  if (accion === 'publicarYa') return { estado: publicarFila_(id, datos.texto) };
   if (accion === 'redactarPendientes') { generarPendientes_(Date.now()); return { ok: true }; }
   if (accion === 'regenerar') {
     const s = regenerarPorId_(id, datos.instruccion || '');
@@ -1697,6 +1840,7 @@ function prepararHojaRespuestas_() {
     regla(ESTADO.REVISAR, '#ffe5b4'),
     regla(ESTADO.ERROR, '#fff3cd'),
     regla(ESTADO.PUBLICADA, '#d4edda'),
+    regla(ESTADO.ENVIADA, '#e3f2e7'),
     regla(ESTADO.DESCARTADA, '#e9ecef'),
   ]);
 }

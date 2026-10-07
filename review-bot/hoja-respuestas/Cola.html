@@ -89,13 +89,14 @@
   const PESTANAS = [
     { id: 'responder', nombre: 'Responder', estados: ['Pendiente', 'Revisar ⚠', 'Error IA (regenerar)'] },
     { id: 'negativas', nombre: 'Negativas', estados: ['A mano (negativa)'] },
-    { id: 'publicadas', nombre: 'Publicadas', estados: ['Publicada ✔'] },
+    { id: 'publicadas', nombre: 'Publicadas', estados: ['Publicada ✔', 'Enviada a Google ⏳'] },
   ];
   const PLATAFORMAS = [['', 'Todas'], ['Google', 'Google'], ['TripAdvisor', 'TripAdvisor']];
   const ESPERA_MAXIMA = 20000;
   const PANEL_GOOGLE = 'https://business.google.com/u/3/reviews?hl=es'; // todas las reseñas de Google, con su botón Responder
 
   let datos = (INICIAL && INICIAL.resenas) || [];
+  let auto = (INICIAL && INICIAL.auto) || null; // publicación automática en Google (vía Make)
   const guardado = k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
   const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
   let pestana = guardado('pestana') || 'responder';
@@ -129,6 +130,7 @@
       try { r = typeof r === 'string' ? JSON.parse(r) : r; } catch (e) { r = null; }
       if (!r || !r.resenas) return aviso('La hoja no devolvió datos. Prueba otra vez.');
       datos = r.resenas;
+      auto = r.auto || null;
       pintar();
     }, e => { b.disabled = false; aviso('No se pudo actualizar: ' + e.message); });
   }
@@ -253,12 +255,26 @@
       if (r.respuestaEs) c.appendChild(es);
       ta.oninput = () => { r.respuesta = ta.value; es.style.opacity = '.45'; };
 
-      // Un solo toque: copia, abre la reseña y la pasa a Publicadas (con Deshacer, y "Devolver" en Publicadas).
-      acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'prim', () => {
-        copiar(ta.value);
-        if (r.url) window.open(r.url, '_blank');
-        cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
-      }));
+      if (auto && r.plataforma === 'Google') {
+        // Publicación directa en Google; si no se toca, las positivas sin avisos salen solas en horario.
+        if (!negativa && !r.aviso && r.estrellas >= auto.minEstrellas) {
+          c.appendChild(el('div', 'es', 'Si no la tocas, se publica sola entre las ' + auto.desde + ':00 y las ' +
+            auto.hasta + ':00.'));
+        }
+        acciones.appendChild(boton('Publicar en Google', 'prim', () => publicarGoogle(r, ta.value)));
+        acciones.appendChild(boton('📋 Copiar y abrir', 'sec', () => {
+          copiar(ta.value);
+          if (r.url) window.open(r.url, '_blank');
+          cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
+        }));
+      } else {
+        // Un solo toque: copia, abre la reseña y la pasa a Publicadas (con Deshacer, y "Devolver" en Publicadas).
+        acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'prim', () => {
+          copiar(ta.value);
+          if (r.url) window.open(r.url, '_blank');
+          cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
+        }));
+      }
       acciones.appendChild(negativa
         ? boton('✍ Otro borrador', 'sec', e => pedirContexto(r, e.currentTarget))
         : boton('↻ Otra versión', 'sec', e => redactar(r, e.currentTarget, '')));
@@ -272,6 +288,7 @@
     const c = el('article', 'card');
     cabecera(c, r);
     c.appendChild(el('div', 'publicada', r.publicada || r.respuesta || 'Publicada fuera de la cola.'));
+    if (r.estado === 'Enviada a Google ⏳') c.appendChild(el('div', 'es', 'Enviada a Google. Se confirmará al leerla publicada.'));
     const acciones = el('div', 'acciones');
     acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'sec', () => {
       copiar(r.publicada || r.respuesta || '');
@@ -284,6 +301,24 @@
     }));
     c.appendChild(acciones);
     return c;
+  }
+
+  // Publicar en Google vía Make: se mueve al momento y, si Make falla, vuelve con el motivo.
+  function publicarGoogle(r, texto) {
+    const antes = { estado: r.estado, publicada: r.publicada };
+    r.estado = 'Enviada a Google ⏳';
+    r.publicada = texto;
+    pintar();
+    aviso('Publicando en Google…');
+    llamar('colaAccion', [r.id, 'publicarYa', { texto: texto }], res => {
+      r.estado = (res && res.estado) || 'Enviada a Google ⏳';
+      pintar();
+      aviso(r.estado === 'Publicada ✔' ? 'Publicada en Google ✔' : 'Enviada a Google ✔');
+    }, e => {
+      r.estado = antes.estado; r.publicada = antes.publicada;
+      pintar();
+      aviso('No se publicó: ' + e.message);
+    });
   }
 
   let rehaciendo = false;
