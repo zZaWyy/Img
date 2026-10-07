@@ -59,8 +59,9 @@
   .acciones .sec { flex: 1; }
   button:disabled { opacity: .55; }
   .nota { color: var(--bad); font-size: 13px; font-weight: 600; }
-  .panel { display: block; text-align: center; padding: 10px; margin: 0 0 12px; border: 1px dashed var(--line);
-    border-radius: 10px; color: var(--accent); text-decoration: none; font-size: 15px; font-weight: 600; }
+  .panel { display: block; width: 100%; text-align: center; padding: 10px; margin: 0 0 12px; border: 1px dashed var(--line);
+    border-radius: 10px; color: var(--accent); background: transparent; text-decoration: none; font: inherit;
+    font-size: 15px; font-weight: 600; cursor: pointer; }
   .vacio { text-align: center; color: var(--muted); padding: 40px 0; }
   #toast { position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 728px; margin: 0 auto; background: var(--text);
     color: var(--bg); padding: 10px 12px 10px 14px; border-radius: 12px; font-size: 15px; display: none; z-index: 5;
@@ -112,9 +113,9 @@
 
   // ------------------------------------------------------------- servidor
   // Llamada con tope de tiempo: con varias cuentas de Google abiertas, google.script.run se pierde sin avisar.
-  function llamar(fn, args, ok, ko) {
+  function llamar(fn, args, ok, ko, sinTope) {
     let hecho = false;
-    const t = setTimeout(() => { if (!hecho) { hecho = true; ko(new Error('sin respuesta (¿varias cuentas de Google abiertas?)')); } }, ESPERA_MAXIMA);
+    const t = sinTope ? 0 : setTimeout(() => { if (!hecho) { hecho = true; ko(new Error('sin respuesta (¿varias cuentas de Google abiertas?)')); } }, ESPERA_MAXIMA);
     google.script.run
       .withSuccessHandler(r => { if (hecho) return; hecho = true; clearTimeout(t); ok(r); })
       .withFailureHandler(e => { if (hecho) return; hecho = true; clearTimeout(t); ko(e); })[fn](...args);
@@ -207,6 +208,10 @@
     panel.target = '_blank';
     panel.rel = 'noopener';
     frag.appendChild(panel);
+    if (pestana !== 'publicadas' && items.some(r => r.respuesta)) {
+      frag.appendChild(boton(rehaciendo ? 'Reescribiendo… (pulsa ↻ en unos minutos)' : '↻ Rehacer todas las respuestas sin publicar',
+        'panel todas', rehacerTodas)).disabled = rehaciendo;
+    }
     if (!items.length) {
       frag.appendChild(el('p', 'vacio', pestana === 'publicadas' ? 'Aquí verás lo publicado en los últimos 60 días.'
         : pestana === 'negativas' ? 'Ninguna negativa pendiente 🙌' : 'Todo respondido 🎉'));
@@ -236,6 +241,9 @@
     const acciones = el('div', 'acciones');
     if (negativa && !r.respuesta) {
       acciones.appendChild(boton('✍ Redactar borrador', 'prim', e => pedirContexto(r, e.currentTarget)));
+    } else if (!r.respuesta) {
+      c.appendChild(el('div', 'vacia', 'La respuesta se está escribiendo. Pulsa ↻ en unos minutos o redáctala ya.'));
+      acciones.appendChild(boton('✍ Redactar ahora', 'prim', e => redactar(r, e.currentTarget, '')));
     } else {
       const ta = el('textarea');
       ta.value = r.respuesta || '';
@@ -276,6 +284,21 @@
     }));
     c.appendChild(acciones);
     return c;
+  }
+
+  let rehaciendo = false;
+  function rehacerTodas() {
+    if (!confirm('Se volverán a escribir todas las respuestas sin publicar (Responder y Negativas). ' +
+      'Las que tienen una indicación del equipo no se tocan. ¿Seguir?')) return;
+    rehaciendo = true;
+    pintar();
+    llamar('colaAccion', ['', 'rehacerTodo', {}], res => {
+      aviso((res && res.cuantos) + ' respuestas se están reescribiendo. Tardan unos minutos.');
+      recargar();
+      // Redacta ya las primeras (unas 25); el resto, en las siguientes vueltas automáticas.
+      llamar('colaAccion', ['', 'redactarPendientes', {}], () => { rehaciendo = false; recargar(); },
+        () => { rehaciendo = false; pintar(); }, true);
+    }, e => { rehaciendo = false; pintar(); aviso('No se pudo: ' + e.message); });
   }
 
   function pedirContexto(r, b) {

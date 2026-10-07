@@ -447,7 +447,14 @@ function rehacerBorradores() {
     'con las instrucciones actuales en las próximas vueltas. Los que tienen una indicación "->" del equipo no se tocan. ' +
     '¿Seguir?', ui.ButtonSet.YES_NO);
   if (r !== ui.Button.YES) return;
-  const n = conBloqueo_(() => {
+  const n = vaciarBorradores_();
+  ui.alert(n + ' borradores se rehacen en las próximas vueltas (unos 25 cada media hora). ' +
+    'Para empezar ya: "Buscar reseñas nuevas ahora".');
+}
+
+/** Vacía los borradores sin publicar (salvo los que tienen indicación "->") y devuelve cuántos. */
+function vaciarBorradores_() {
+  return conBloqueo_(() => {
     const hoja = hoja_(HOJA.RESPUESTAS);
     if (hoja.getLastRow() < 2) return 0;
     let cuenta = 0;
@@ -464,8 +471,6 @@ function rehacerBorradores() {
     });
     return cuenta;
   });
-  ui.alert(n + ' borradores se rehacen en las próximas vueltas (unos 25 cada media hora). ' +
-    'Para empezar ya: "Buscar reseñas nuevas ahora".');
 }
 
 function pedirRecuperacion() {
@@ -1344,6 +1349,8 @@ function colaDatos() {
 /** Acciones desde la cola: publicada, descartar, regenerar, reabrir. */
 function colaAccion(id, accion, datos) {
   datos = datos || {};
+  if (accion === 'rehacerTodo') return { cuantos: vaciarBorradores_() };
+  if (accion === 'redactarPendientes') { generarPendientes_(Date.now()); return { ok: true }; }
   if (accion === 'regenerar') {
     const s = regenerarPorId_(id, datos.instruccion || '');
     return { respuesta: s.respuesta, aviso: s.aviso, traduccion: s.traduccion,
