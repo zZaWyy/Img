@@ -1416,8 +1416,15 @@ function publicarFila_(id, texto) {
   // Solo cuenta como publicada si Make lo confirma (módulo "Webhook response" con {"ok":true}).
   // "Accepted" significa que Make la recibió pero el escenario está apagado o incompleto.
   if (!/"ok"\s*:\s*true/.test(cuerpo)) {
-    throw new Error('Make la recibió pero no confirmó la publicación. Revisa que el escenario esté activado y ' +
-      'termine con el módulo "Webhook response" (cuerpo {"ok":true}).');
+    // Make no la publicó: no encontró la reseña en Google, ya tenía respuesta o el escenario está apagado.
+    // Se marca para hacerla a mano y así no se reintenta (ni gasta operaciones) en cada vuelta.
+    conBloqueo_(() => {
+      const m = filaPorId_(hoja, id);
+      if (m) hoja.getRange(m, COL.AVISO).setValue('No se pudo publicar sola en Google (¿ya tenía respuesta o no se ' +
+        'encontró?). Revísala y publícala a mano.');
+    });
+    throw new Error('Make la recibió pero no la publicó: puede que la reseña ya tuviera respuesta o no se encontrara. ' +
+      'Queda marcada para hacerla a mano. Si pasa con todas, revisa que el escenario de Make esté activado.');
   }
   const estado = ESTADO.PUBLICADA;
   conBloqueo_(() => {
@@ -1492,7 +1499,11 @@ function colaDatos() {
 function colaAccion(id, accion, datos) {
   datos = datos || {};
   if (accion === 'rehacerTodo') return { cuantos: vaciarBorradores_() };
-  if (accion === 'publicarYa') return { estado: publicarFila_(id, datos.texto) };
+  if (accion === 'publicarYa') {
+    const estado = publicarFila_(id, datos.texto);
+    conBloqueo_(actualizarHojaPublicadas_);
+    return { estado: estado };
+  }
   if (accion === 'redactarPendientes') { generarPendientes_(Date.now()); return { ok: true }; }
   if (accion === 'regenerar') {
     const s = regenerarPorId_(id, datos.instruccion || '');

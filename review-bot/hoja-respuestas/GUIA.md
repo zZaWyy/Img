@@ -223,25 +223,35 @@ Google** para publicarlas al momento. Horario y condiciones: `PUBLICAR_*`,
 3. Pulsa **Run once** (abajo). Ahora, en la hoja: **Reseñas → 🤖
    Publicación automática en Google** → pega la dirección. La hoja envía una
    muestra y Make aprende los campos (*Successfully determined*).
-4. En Make, **＋** después del webhook → **Google My Business → Create/Update
-   a Review Reply** → **Create a connection** con `simsalabimgrupo` y acepta
-   los permisos.
-   - En *Review*, elige con los desplegables cualquier cuenta, local y
-     reseña. Activa **Map** (el interruptor junto al campo): verás algo como
-     `accounts/123…/locations/456…/reviews/xyz…`.
-   - Deja `accounts/123…/locations/` tal cual y sustituye el resto por los
-     campos del webhook: `accounts/123…/locations/{{ubicacion}}/reviews/{{reviewId}}`
-     (arrastra *ubicacion* y *reviewId* desde la lista).
-   - En *Reply comment*, arrastra **respuesta**.
-5. **＋** → **Webhooks → Webhook response** → *Status* `200`, *Body*
+4. **＋** después del webhook → **Google Business Profile → Make an API
+   Call** → conexión con la cuenta que gestiona las fichas → *API Type*:
+   **Legacy Google My Business API** → *Method* `GET` → *URL*:
+   `/v4/accounts/NÚMERO_CUENTA/locations/{{1.ubicacion}}/reviews` →
+   *Query String*: `pageSize` = `50`. (El número de cuenta de Unicum Group
+   es `108401907022019746383`. Para otro, en *Create/Update a Review Reply*
+   elige una reseña de la lista y cambia a *Enter manually*: sale la ruta.)
+   - Google usa sus propios códigos de reseña, distintos de los que lee la
+     hoja; por eso Make pide las últimas 50 del local y elige la buena.
+5. **＋** → **Flow Control → Iterator** → *Array*: **body → reviews[]** del
+   módulo anterior.
+6. **＋** → **Google Business Profile → Create/Update a Review Reply** →
+   *Enter manually* → *Review name*: **name** (del Iterator) → *Reply
+   comment*: **respuesta** (del webhook).
+7. Filtro en la línea entre el Iterator y la respuesta: **reviewer →
+   displayName** *Equal to* **cliente** (del webhook) **Y** **reviewReply**
+   *Does not exist*. Así responde solo a esa reseña y nunca pisa una
+   respuesta que ya exista.
+8. **＋** → **Webhooks → Webhook response** → *Status* `200`, *Body*
    `{"ok":true}`.
-6. Guarda 💾, activa el escenario (interruptor **ON**) y, en el reloj del
-   escenario, elige **Immediately**.
-7. Prueba: en la cola, en una reseña de Google, pulsa **Publicar en Google**
-   y comprueba en Google que aparece la respuesta.
+9. Guarda 💾, activa el escenario (**ON**) con **Immediately as data
+   arrives**.
+10. Prueba: en la cola, en una reseña de Google, pulsa **Publicar en
+    Google** y comprueba en Google que aparece la respuesta.
 
-Si Make falla, la reseña vuelve a la cola y llega un correo con el motivo.
-Para desactivarlo: **Reseñas → 🤖 Publicación automática en Google**.
+Si Make no la publica (ya tenía respuesta, no la encontró o el escenario
+está apagado), la reseña se queda en la cola marcada en naranja para
+hacerla a mano y llega un correo. No se reintenta sola, así no gasta
+operaciones. Para desactivarlo: **Reseñas → 🤖 Publicación automática en Google**.
 
 ## Compartir la cola con el equipo
 
