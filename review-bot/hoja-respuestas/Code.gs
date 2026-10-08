@@ -1413,9 +1413,10 @@ function publicarFila_(id, texto) {
   const codigo = res.getResponseCode();
   const cuerpo = res.getContentText();
   if (codigo >= 300) throw new Error('Make respondió ' + codigo + ': ' + cuerpo.slice(0, 200));
-  // Solo cuenta como publicada si Make lo confirma (módulo "Webhook response" con {"ok":true}).
-  // "Accepted" significa que Make la recibió pero el escenario está apagado o incompleto.
-  if (!/"ok"\s*:\s*true/.test(cuerpo)) {
+  // Solo cuenta como publicada si llega al último módulo de Make ("Webhook response").
+  // Si Make contesta solo "Accepted", no llegó: no encontró la reseña, ya tenía respuesta,
+  // el escenario está apagado o se procesó en modo "Run once".
+  if (!cuerpo.trim() || cuerpo.trim() === 'Accepted') {
     // Make no la publicó: no encontró la reseña en Google, ya tenía respuesta o el escenario está apagado.
     // Se marca para hacerla a mano y así no se reintenta (ni gasta operaciones) en cada vuelta.
     conBloqueo_(() => {
@@ -1423,8 +1424,9 @@ function publicarFila_(id, texto) {
       if (m) hoja.getRange(m, COL.AVISO).setValue('No se pudo publicar sola en Google (¿ya tenía respuesta o no se ' +
         'encontró?). Revísala y publícala a mano.');
     });
-    throw new Error('Make la recibió pero no la publicó: puede que la reseña ya tuviera respuesta o no se encontrara. ' +
-      'Queda marcada para hacerla a mano. Si pasa con todas, revisa que el escenario de Make esté activado.');
+    throw new Error('Make la recibió pero no la publicó (respondió "' + cuerpo.trim().slice(0, 60) + '"): puede que ' +
+      'la reseña ya tuviera respuesta o no se encontrara. Queda marcada para hacerla a mano. Si pasa con todas, ' +
+      'revisa que el escenario de Make esté activado.');
   }
   const estado = ESTADO.PUBLICADA;
   conBloqueo_(() => {
