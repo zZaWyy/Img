@@ -263,11 +263,16 @@ operaciones. Para desactivarlo: **Reseñas → 🤖 Publicación automática en 
 Un segundo escenario de Make recorre el historial de cada local y la hoja
 responde, con una respuesta breve y general, las **positivas que nunca se
 respondieron**. Va despacio (`HIST_PAGINAS_POR_DIA` = 6 páginas de 50
-reseñas y `HIST_RESPUESTAS_POR_DIA` = 8 respuestas al día), siempre
-después de las nuevas, y no aparecen en la cola. Gasta unos 4 créditos de
-Make por página y 3 por respuesta: con el plan gratis, los créditos del mes
-se acaban antes y entonces Make se para hasta el mes siguiente (también
-las nuevas).
+reseñas y `HIST_RESPUESTAS_POR_DIA` = 8 respuestas al día como máximo),
+siempre después de las nuevas, y no aparecen en la cola.
+
+**No gasta los créditos de las nuevas:** la hoja lleva la cuenta de los
+créditos de Make del ciclo y reserva los que necesitarán las nuevas hasta
+la renovación (según el ritmo real, con un 20 % de margen). Las antiguas
+solo usan lo que sobra: con el plan gratis avanzan sobre todo al final de
+cada ciclo; con un plan de pago (cambiad `MAKE_CREDITOS_MES`) van a diario.
+`MAKE_DIA_RENOVACION` es el día del mes en que Make renueva los créditos
+(en Make → *Org* se ve la fecha).
 
 **Montarlo en Make** (nuevo escenario):
 

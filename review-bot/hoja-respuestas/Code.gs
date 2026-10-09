@@ -79,6 +79,14 @@ const CONFIG = {
   // Van despacio para no gastar los créditos de Make de golpe; las nuevas siempre van antes.
   HIST_PAGINAS_POR_DIA: 6,               // cada página son 50 reseñas leídas (unos 4 créditos)
   HIST_RESPUESTAS_POR_DIA: 8,            // respuestas a antiguas al día (unos 3 créditos cada una)
+
+  // --- Créditos de Make ---
+  // Las antiguas solo usan lo que sobra después de reservar lo que necesitarán las nuevas hasta
+  // que Make renueve los créditos. Si contratáis un plan de pago, cambiad MAKE_CREDITOS_MES.
+  MAKE_CREDITOS_MES: 1000,
+  MAKE_DIA_RENOVACION: 8,                // día del mes en que Make renueva los créditos (el del alta)
+  MAKE_NUEVAS_POR_DIA: 7,                // previsión mínima de publicaciones nuevas al día
+  MAKE_CREDITOS_POR_NUEVA: 5,
 };
 
 const ZONA = 'Europe/Madrid';
@@ -1479,7 +1487,8 @@ function publicarAutomaticas_() {
   // Primero las nuevas (de la más antigua a la más reciente; la hoja va al revés)…
   const nuevas = listas.filter(f => !esHistorica_(f[COL.ID - 1])).reverse();
   // …y, si queda hueco, unas pocas antiguas al día.
-  const libres = Math.max(0, CONFIG.HIST_RESPUESTAS_POR_DIA - contadorHistorico_().respuestas);
+  const libres = Math.max(0, Math.min(CONFIG.HIST_RESPUESTAS_POR_DIA - contadorHistorico_().respuestas,
+    Math.floor(creditosSobrantes_() / CREDITOS.RESPUESTA_ANTIGUA)));
   const antiguas = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK_HISTORICO')
     ? listas.filter(f => esHistorica_(f[COL.ID - 1])).slice(0, libres) : [];
   const candidatas = nuevas.concat(antiguas).slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
@@ -1533,6 +1542,9 @@ function publicarFila_(id, texto) {
   });
   const codigo = res.getResponseCode();
   const cuerpo = res.getContentText();
+  const confirmada = codigo < 300 && cuerpo.trim() && cuerpo.trim() !== 'Accepted';
+  apuntarCreditosMake_(historica ? (confirmada ? CREDITOS.RESPUESTA_ANTIGUA : 1)
+    : (confirmada ? CONFIG.MAKE_CREDITOS_POR_NUEVA : CREDITOS.NUEVA_SIN_PUBLICAR), confirmada && !historica);
   if (codigo >= 300) throw new Error('Make respondió ' + codigo + ': ' + cuerpo.slice(0, 200));
   // Solo cuenta como publicada si llega al último módulo de Make ("Webhook response").
   // Si Make contesta solo "Accepted", no llegó: no encontró la reseña, ya tenía respuesta,
@@ -1596,6 +1608,47 @@ function guardarContadorHistorico_(c) {
   PropertiesService.getScriptProperties().setProperty('HIST_HOY', JSON.stringify(c));
 }
 
+/** Créditos de Make que gasta cada envío (aproximado: uno por módulo que se ejecuta). */
+const CREDITOS = { PAGINA: 4, RESPUESTA_ANTIGUA: 3, NUEVA_SIN_PUBLICAR: 3 };
+
+/** Ciclo de facturación de Make: de un día de renovación al siguiente. */
+function cicloMake_(ahora) {
+  const d = new Date(ahora);
+  let inicio = new Date(d.getFullYear(), d.getMonth(), CONFIG.MAKE_DIA_RENOVACION);
+  if (inicio.getTime() > d.getTime()) inicio = new Date(d.getFullYear(), d.getMonth() - 1, CONFIG.MAKE_DIA_RENOVACION);
+  const fin = new Date(inicio.getFullYear(), inicio.getMonth() + 1, CONFIG.MAKE_DIA_RENOVACION);
+  return { ciclo: Utilities.formatDate(inicio, ZONA, 'yyyy-MM-dd'), inicio: inicio.getTime(), fin: fin.getTime() };
+}
+
+/** Créditos que la hoja ha hecho gastar a Make en el ciclo actual (estimación). */
+function usoMake_() {
+  const c = cicloMake_(Date.now());
+  const u = JSON.parse(PropertiesService.getScriptProperties().getProperty('MAKE_USO') || '{}');
+  return Object.assign(u.ciclo === c.ciclo ? u : { creditos: 0, nuevas: 0 }, c);
+}
+
+function apuntarCreditosMake_(creditos, nueva) {
+  const u = usoMake_();
+  u.creditos += creditos;
+  if (nueva) u.nuevas++;
+  PropertiesService.getScriptProperties().setProperty('MAKE_USO',
+    JSON.stringify({ ciclo: u.ciclo, creditos: u.creditos, nuevas: u.nuevas }));
+}
+
+/**
+ * Lo que sobra para las antiguas: créditos del mes, menos lo gastado, menos lo
+ * que necesitarán las nuevas hasta la renovación (con un 20 % de margen).
+ */
+function creditosSobrantes_() {
+  const u = usoMake_();
+  const ahora = Date.now();
+  const dias = Math.max(1, (ahora - u.inicio) / DIA);
+  const quedan = Math.max(0, (u.fin - ahora) / DIA);
+  const ritmo = Math.max(CONFIG.MAKE_NUEVAS_POR_DIA, u.nuevas / dias);
+  const reserva = ritmo * CONFIG.MAKE_CREDITOS_POR_NUEVA * quedan * 1.2;
+  return Math.floor(CONFIG.MAKE_CREDITOS_MES - u.creditos - reserva);
+}
+
 function configurarHistorico() {
   const ui = SpreadsheetApp.getUi();
   const props = PropertiesService.getScriptProperties();
@@ -1609,7 +1662,13 @@ function configurarHistorico() {
     const hoja = hoja_(HOJA.RESPUESTAS);
     const respondidas = hoja.getLastRow() < 2 ? 0 : hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues()
       .filter(f => esHistorica_(f[COL.ID - 1]) && f[COL.ESTADO - 1] === ESTADO.PUBLICADA).length;
+    const u = usoMake_();
+    const sobran = creditosSobrantes_();
     const r = ui.alert('Reseñas antiguas: ACTIVADO\n\n' + lineas.join('\n') + '\n\nYa respondidas: ' + respondidas +
+      '\n\nCréditos de Make este ciclo (hasta el ' + Utilities.formatDate(new Date(u.fin), ZONA, 'dd/MM') + '): unos ' +
+      u.creditos + ' de ' + CONFIG.MAKE_CREDITOS_MES + '. ' + (sobran > 0
+        ? 'Para las antiguas quedan unos ' + sobran + ' sin tocar los de las nuevas.'
+        : 'Ahora mismo no sobran: las antiguas esperan para no gastar los créditos de las nuevas.') +
       '\n\n¿Quieres desactivarlo?', ui.ButtonSet.YES_NO);
     if (r === ui.Button.YES) {
       props.deleteProperty('MAKE_WEBHOOK_HISTORICO');
@@ -1636,9 +1695,9 @@ function configurarHistorico() {
       payload: JSON.stringify({ accion: 'prueba', ubicacion: '0', pageToken: '', nombreApi: '', respuesta: '' }) });
   } catch (e) { /* solo es una muestra */ }
   props.setProperty('MAKE_WEBHOOK_HISTORICO', url);
-  ui.alert('Activado ✔ Cada día se revisarán ' + CONFIG.HIST_PAGINAS_POR_DIA * 50 + ' reseñas antiguas y se ' +
-    'publicarán hasta ' + CONFIG.HIST_RESPUESTAS_POR_DIA + ' respuestas breves a las positivas que nunca se ' +
-    'respondieron, siempre después de las nuevas.');
+  ui.alert('Activado ✔ Las positivas antiguas que nunca se respondieron se irán contestando poco a poco ' +
+    '(como mucho ' + CONFIG.HIST_RESPUESTAS_POR_DIA + ' al día), solo con los créditos de Make que sobren ' +
+    'después de reservar los que necesitan las nuevas hasta la renovación.');
 }
 
 /** Lee una página de reseñas antiguas (si quedan hoy) y añade las positivas sin responder. */
@@ -1648,6 +1707,7 @@ function leerHistorico_() {
   if (!url) return;
   const hoy = contadorHistorico_();
   if (hoy.paginas >= CONFIG.HIST_PAGINAS_POR_DIA) return;
+  if (creditosSobrantes_() < CREDITOS.PAGINA) return; // los créditos que quedan son para las nuevas
   const estado = JSON.parse(props.getProperty('HIST_ESTADO') || '{}');
   const pendientes = leerRestaurantes_().filter(r => r.activo && NEGOCIO_GOOGLE[r.cid] && !(estado[r.cid] || {}).fin);
   if (!pendientes.length) return;
@@ -1661,6 +1721,7 @@ function leerHistorico_() {
     muteHttpExceptions: true,
     payload: JSON.stringify({ accion: 'listar', ubicacion: NEGOCIO_GOOGLE[rest.cid], pageToken: e.token || '' }),
   });
+  apuntarCreditosMake_(CREDITOS.PAGINA, false);
   const cuerpo = res.getContentText();
   let datos = null;
   try { datos = JSON.parse(cuerpo); } catch (err) { /* no es JSON */ }
