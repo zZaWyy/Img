@@ -255,8 +255,8 @@
       const ta = el('textarea');
       ta.value = r.respuesta || '';
       ta.rows = Math.max(3, Math.ceil(ta.value.length / 42));
-      // En otros idiomas (salvo inglés) se edita en español y se traduce al idioma del cliente.
-      const enEspanol = Boolean(r.respuestaEs) && r.idioma !== 'en';
+      // Si la respuesta no está en español, se edita en español y se traduce al idioma del cliente.
+      const enEspanol = Boolean(r.respuestaEs);
       if (enEspanol) {
         c.appendChild(el('div', 'etiqueta', 'En español (edita aquí)'));
         const taEs = el('textarea');

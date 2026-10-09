@@ -74,6 +74,11 @@ const CONFIG = {
   HORAS_DESDE_RESENA: 2,                 // nunca antes de este tiempo desde que se escribió la reseña
   PUBLICACIONES_POR_VUELTA: 3,           // cada media hora: así se reparten durante el día
   MIN_ESTRELLAS_AUTO: 4,
+
+  // --- Reseñas antiguas de Google sin responder (2.º escenario de Make; ver GUIA.md) ---
+  // Van despacio para no gastar los créditos de Make de golpe; las nuevas siempre van antes.
+  HIST_PAGINAS_POR_DIA: 6,               // cada página son 50 reseñas leídas (unos 4 créditos)
+  HIST_RESPUESTAS_POR_DIA: 8,            // respuestas a antiguas al día (unos 3 créditos cada una)
 };
 
 const ZONA = 'Europe/Madrid';
@@ -392,6 +397,7 @@ function onOpen() {
     .addItem('♻ Rehacer todos los borradores pendientes', 'rehacerBorradores')
     .addItem('💳 Gemini de pago: activar / desactivar', 'alternarGeminiPago')
     .addItem('🤖 Publicación automática en Google', 'configurarPublicacion')
+    .addItem('📜 Reseñas antiguas de Google', 'configurarHistorico')
     .addItem('💶 Ver gasto de Apify', 'mostrarGastoApify')
     .addItem('🔑 Cambiar claves', 'cambiarClaves')
     .addItem('⚙ Instalar / reparar', 'instalar')
@@ -727,6 +733,7 @@ function ciclo() {
   try { enviarInformeSiToca_(); } catch (e) { avisarError_('informe', 'No se pudo enviar el informe semanal: ' + (e.message || e)); }
   generarPendientes_(inicio);
   try { publicarAutomaticas_(); } catch (e) { avisarError_('publicar', 'Fallo en la publicación automática: ' + (e.message || e)); }
+  try { leerHistorico_(); } catch (e) { avisarError_('historico', 'Fallo leyendo reseñas antiguas: ' + (e.message || e)); }
   enviarResumenSiToca_();
   try { conBloqueo_(actualizarHojaPublicadas_); } catch (e) { console.warn('publicadas: ' + e); }
 }
@@ -1112,7 +1119,14 @@ function redactar_(fila, contexto, instruccion, manual) {
   p.push('Cliente: ' + fila[COL.CLIENTE - 1]);
   p.push('Puntuación: ' + estrellas + ' estrellas');
   p.push(texto ? 'Reseña:\n' + texto : 'Reseña: (sin texto, solo puntuación)');
-  p.push('\nLongitud máxima de la respuesta: ' + palabrasObjetivo_(texto, estrellas) + ' palabras.');
+  const historica = esHistorica_(fila[COL.ID - 1]);
+  p.push('\nLongitud máxima de la respuesta: ' + (historica ? Math.min(25, palabrasObjetivo_(texto, estrellas))
+    : palabrasObjetivo_(texto, estrellas)) + ' palabras.');
+  if (historica) {
+    p.push('Esta reseña es ANTIGUA (de ' + Utilities.formatDate(fecha_(fila[COL.FECHA - 1]), ZONA, 'MM/yyyy') +
+      ') y nunca se respondió: responde de forma breve y general, agradeciendo la valoración, sin referirte a ' +
+      'cuándo fue la visita ni a detalles que puedan haber cambiado.');
+  }
   const lengua = texto && idioma ? nombreIdioma_(idioma) : '';
   if (lengua) {
     p.push('\nIdioma de la reseña: ' + lengua + '. Escribe la respuesta en ' + lengua +
@@ -1123,7 +1137,7 @@ function redactar_(fila, contexto, instruccion, manual) {
   if (pedirTraduccion) p.push('\nIncluye en "traduccion" la traducción de la reseña al español.');
 
   const largo = texto.length >= CONFIG.LONGITUD_RESENA_CORTA;
-  const mejor = manual || largo || geminiPago_();
+  const mejor = manual || (largo && !historica) || geminiPago_();
   const salida = llamarIA_(contexto.prompt, p.join('\n'), mejor ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
 
   // Comprobación de idioma (salvo que el equipo haya dado una indicación propia).
@@ -1460,10 +1474,15 @@ function publicarAutomaticas_() {
   if (hoja.getLastRow() < 2) return;
   const ahora = Date.now();
   const inactivos = localesInactivos_();
-  const candidatas = hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues()
-    .filter(f => publicableSola_(f, ahora) && !deLocalInactivo_(f, inactivos))
-    .reverse()   // la hoja va de más reciente a más antigua
-    .slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
+  const listas = hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues()
+    .filter(f => publicableSola_(f, ahora) && !deLocalInactivo_(f, inactivos));
+  // Primero las nuevas (de la más antigua a la más reciente; la hoja va al revés)…
+  const nuevas = listas.filter(f => !esHistorica_(f[COL.ID - 1])).reverse();
+  // …y, si queda hueco, unas pocas antiguas al día.
+  const libres = Math.max(0, CONFIG.HIST_RESPUESTAS_POR_DIA - contadorHistorico_().respuestas);
+  const antiguas = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK_HISTORICO')
+    ? listas.filter(f => esHistorica_(f[COL.ID - 1])).slice(0, libres) : [];
+  const candidatas = nuevas.concat(antiguas).slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
   for (const f of candidatas) {
     try {
       publicarFila_(f[COL.ID - 1], f[COL.RESPUESTA - 1]);
@@ -1489,7 +1508,15 @@ function publicarFila_(id, texto) {
   const rest = buscarRestaurantePorNombre_(leerRestaurantes_(), f[COL.RESTAURANTE - 1]);
   if (rest && !rest.activo) throw new Error('Ese local está desactivado en la pestaña Restaurantes: no se publica.');
   const cid = (rest && rest.cid) || '';
-  const res = UrlFetchApp.fetch(url, {
+  const historica = esHistorica_(id);
+  const urlHist = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK_HISTORICO');
+  if (historica && !urlHist) throw new Error('Falta configurar las reseñas antiguas (menú Reseñas → Reseñas antiguas de Google).');
+  const res = historica ? UrlFetchApp.fetch(urlHist, {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    payload: JSON.stringify({ accion: 'responder', nombreApi: String(id).slice(PREFIJO_HISTORICO.length), respuesta: respuesta }),
+  }) : UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
     muteHttpExceptions: true,
@@ -1523,6 +1550,11 @@ function publicarFila_(id, texto) {
       'revisa que el escenario de Make esté activado.');
   }
   const estado = ESTADO.PUBLICADA;
+  if (historica) {
+    const c = contadorHistorico_();
+    c.respuestas++;
+    guardarContadorHistorico_(c);
+  }
   conBloqueo_(() => {
     const m = filaPorId_(hoja, id);
     if (!m) return;
@@ -1532,6 +1564,163 @@ function publicarFila_(id, texto) {
       Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm'));
   });
   return estado;
+}
+
+
+// ============================================ reseñas antiguas de Google
+
+/**
+ * Responde poco a poco las reseñas positivas antiguas de Google que nunca se
+ * contestaron. Un segundo escenario de Make (ver GUIA.md) hace dos cosas:
+ *  - "listar": devuelve una página de 50 reseñas de un local (con el código
+ *    de Google de cada una), recorriendo el historial de la más nueva a la
+ *    más antigua;
+ *  - "responder": publica la respuesta con ese código.
+ * Las filas llevan el ID "ga:" + código de Google; no salen en la cola y
+ * se publican solas en horario, después de las nuevas.
+ */
+const PREFIJO_HISTORICO = 'ga:';
+const ESTRELLAS_API = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+
+function esHistorica_(id) {
+  return String(id || '').indexOf(PREFIJO_HISTORICO) === 0;
+}
+
+function contadorHistorico_() {
+  const hoy = Utilities.formatDate(new Date(), ZONA, 'yyyy-MM-dd');
+  const c = JSON.parse(PropertiesService.getScriptProperties().getProperty('HIST_HOY') || '{}');
+  return c.dia === hoy ? c : { dia: hoy, paginas: 0, respuestas: 0 };
+}
+
+function guardarContadorHistorico_(c) {
+  PropertiesService.getScriptProperties().setProperty('HIST_HOY', JSON.stringify(c));
+}
+
+function configurarHistorico() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('MAKE_WEBHOOK_HISTORICO')) {
+    const estado = JSON.parse(props.getProperty('HIST_ESTADO') || '{}');
+    const lineas = leerRestaurantes_().filter(r => r.activo && NEGOCIO_GOOGLE[r.cid]).map(r => {
+      const e = estado[r.cid] || {};
+      return '• ' + r.nombre + ': ' + (e.paginas || 0) * 50 + ' reseñas revisadas, ' + (e.anadidas || 0) +
+        ' por responder' + (e.fin ? ' (terminado)' : '');
+    });
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    const respondidas = hoja.getLastRow() < 2 ? 0 : hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues()
+      .filter(f => esHistorica_(f[COL.ID - 1]) && f[COL.ESTADO - 1] === ESTADO.PUBLICADA).length;
+    const r = ui.alert('Reseñas antiguas: ACTIVADO\n\n' + lineas.join('\n') + '\n\nYa respondidas: ' + respondidas +
+      '\n\n¿Quieres desactivarlo?', ui.ButtonSet.YES_NO);
+    if (r === ui.Button.YES) {
+      props.deleteProperty('MAKE_WEBHOOK_HISTORICO');
+      ui.alert('Desactivado. Las antiguas que ya estaban en la hoja se quedan sin publicar.');
+    }
+    return;
+  }
+  const r = ui.prompt('Reseñas antiguas de Google',
+    'Pega la dirección del webhook del escenario de Make "Reseñas antiguas" (empieza por https://hook.):',
+    ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const url = r.getResponseText().trim();
+  if (!/^https:\/\/hook\.[a-z0-9.-]*make\.com\/\S+$/.test(url)) {
+    ui.alert('Esa dirección no parece un webhook de Make (https://hook.….make.com/…). Revísala.');
+    return;
+  }
+  if (url === props.getProperty('MAKE_WEBHOOK')) {
+    ui.alert('Esa es la dirección del escenario de reseñas nuevas. Para las antiguas hace falta el segundo escenario.');
+    return;
+  }
+  // Muestra para que Make aprenda los campos (en Make: "Run once" antes de pegar la dirección).
+  try {
+    UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ accion: 'prueba', ubicacion: '0', pageToken: '', nombreApi: '', respuesta: '' }) });
+  } catch (e) { /* solo es una muestra */ }
+  props.setProperty('MAKE_WEBHOOK_HISTORICO', url);
+  ui.alert('Activado ✔ Cada día se revisarán ' + CONFIG.HIST_PAGINAS_POR_DIA * 50 + ' reseñas antiguas y se ' +
+    'publicarán hasta ' + CONFIG.HIST_RESPUESTAS_POR_DIA + ' respuestas breves a las positivas que nunca se ' +
+    'respondieron, siempre después de las nuevas.');
+}
+
+/** Lee una página de reseñas antiguas (si quedan hoy) y añade las positivas sin responder. */
+function leerHistorico_() {
+  const props = PropertiesService.getScriptProperties();
+  const url = props.getProperty('MAKE_WEBHOOK_HISTORICO');
+  if (!url) return;
+  const hoy = contadorHistorico_();
+  if (hoy.paginas >= CONFIG.HIST_PAGINAS_POR_DIA) return;
+  const estado = JSON.parse(props.getProperty('HIST_ESTADO') || '{}');
+  const pendientes = leerRestaurantes_().filter(r => r.activo && NEGOCIO_GOOGLE[r.cid] && !(estado[r.cid] || {}).fin);
+  if (!pendientes.length) return;
+  // Todos los locales avanzan a la par.
+  pendientes.sort((a, b) => ((estado[a.cid] || {}).paginas || 0) - ((estado[b.cid] || {}).paginas || 0));
+  const rest = pendientes[0];
+  const e = estado[rest.cid] || { token: '', paginas: 0, anadidas: 0, fin: false };
+  const res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    payload: JSON.stringify({ accion: 'listar', ubicacion: NEGOCIO_GOOGLE[rest.cid], pageToken: e.token || '' }),
+  });
+  const cuerpo = res.getContentText();
+  let datos = null;
+  try { datos = JSON.parse(cuerpo); } catch (err) { /* no es JSON */ }
+  if (res.getResponseCode() >= 300 || !datos || typeof datos !== 'object') {
+    throw new Error('el escenario de Make "Reseñas antiguas" respondió ' + res.getResponseCode() + ': "' +
+      cuerpo.trim().slice(0, 80) + '". Revisa que esté activado y termine con "Webhook response".');
+  }
+  const filas = filasHistoricas_(datos.reviews || [], rest);
+  if (filas.length) conBloqueo_(() => anadirFilas_(hoja_(HOJA.RESPUESTAS), filas));
+  e.paginas = (e.paginas || 0) + 1;
+  e.anadidas = (e.anadidas || 0) + filas.length;
+  e.token = datos.nextPageToken || '';
+  e.fin = !datos.nextPageToken;
+  estado[rest.cid] = e;
+  props.setProperty('HIST_ESTADO', JSON.stringify(estado));
+  hoy.paginas++;
+  guardarContadorHistorico_(hoy);
+}
+
+/** Positivas sin respuesta, de hace más de DIAS_MAXIMOS días (las recientes las trae la lectura normal). */
+function filasHistoricas_(reviews, rest) {
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const ids = new Set();
+  const claves = new Set();
+  if (hoja.getLastRow() >= 2) {
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues().forEach(f => {
+      ids.add(String(f[COL.ID - 1]));
+      claves.add(claveResena_(f[COL.CLIENTE - 1], f[COL.FECHA - 1]));
+    });
+  }
+  const limite = Date.now() - CONFIG.DIAS_MAXIMOS * DIA;
+  const enlace = 'https://business.google.com/n/' + NEGOCIO_GOOGLE[rest.cid] + '/reviews';
+  const filas = [];
+  reviews.forEach(rv => {
+    if (!rv || !rv.name || rv.reviewReply) return;
+    const estrellas = ESTRELLAS_API[rv.starRating] || 0;
+    if (estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR) return;
+    const fecha = fecha_(rv.createTime);
+    if (fecha.getTime() > limite) return;
+    const cliente = (rv.reviewer && rv.reviewer.displayName) || 'Cliente';
+    const id = PREFIJO_HISTORICO + rv.name;
+    if (ids.has(id) || claves.has(claveResena_(cliente, fecha))) return;
+    ids.add(id);
+    const texto = textoOriginal_(rv.comment);
+    filas.push([fecha, 'Google', rest.nombre, cliente, estrellas, idiomaProbable_(texto) || '', texto, '', '', '',
+      enlace, ESTADO.PENDIENTE, '', '', '', id, '']);
+  });
+  return filas;
+}
+
+function claveResena_(cliente, fecha) {
+  return normalizar_(cliente) + '|' + Utilities.formatDate(fecha_(fecha), 'UTC', 'yyyy-MM-dd');
+}
+
+/** Google añade su traducción: "(Translated by Google) … (Original) …". Se queda el original. */
+function textoOriginal_(comentario) {
+  const t = String(comentario || '');
+  const i = t.indexOf('(Original)');
+  if (i >= 0) return t.slice(i + '(Original)'.length).trim();
+  return t.replace(/^\(Translated by Google\)\s*/, '').trim();
 }
 
 
@@ -1562,7 +1751,7 @@ function colaDatos() {
   const inactivos = localesInactivos_();
   const resenas = filas
     .map((f, i) => ({ f: f, url: (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '' }))
-    .filter(x => !deLocalInactivo_(x.f, inactivos))
+    .filter(x => !deLocalInactivo_(x.f, inactivos) && !esHistorica_(x.f[COL.ID - 1]))
     .filter(x => ESTADOS_ABIERTOS.indexOf(x.f[COL.ESTADO - 1]) >= 0)
     .slice(0, 300)
     .concat(filas
@@ -1666,7 +1855,7 @@ function enviarResumenSiToca_() {
   let total = 0;
   const inactivos = localesInactivos_();
   hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues().forEach(f => {
-    if (deLocalInactivo_(f, inactivos)) return;
+    if (deLocalInactivo_(f, inactivos) || esHistorica_(f[COL.ID - 1])) return;
     const estado = f[COL.ESTADO - 1];
     if (ESTADOS_ABIERTOS.indexOf(estado) < 0) return;
     const r = f[COL.RESTAURANTE - 1];

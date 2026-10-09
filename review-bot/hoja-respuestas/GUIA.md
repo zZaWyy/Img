@@ -143,7 +143,7 @@ momento, sin pantallas de carga.
   Las que tienen borde naranja mencionan algo a revisar: el aviso dice qué.
 - **↻ Otra versión:** la reescribe al momento. Para cambiar algo concreto,
   edita el texto directamente.
-- **En otros idiomas** (salvo inglés) se edita **en español**: cambia el
+- **En otros idiomas** (también inglés) se edita **en español**: cambia el
   texto de arriba y pulsa **Traducir al idioma del cliente**; abajo verás
   cómo quedará publicada.
 - **TripAdvisor:** *Copiar y abrir* copia la respuesta y abre la reseña;
@@ -257,6 +257,39 @@ Si Make no la publica (ya tenía respuesta, no la encontró o el escenario
 está apagado), la reseña se queda en la cola marcada en naranja para
 hacerla a mano y llega un correo. No se reintenta sola, así no gasta
 operaciones. Para desactivarlo: **Reseñas → 🤖 Publicación automática en Google**.
+
+## Reseñas antiguas de Google sin responder (opcional)
+
+Un segundo escenario de Make recorre el historial de cada local y la hoja
+responde, con una respuesta breve y general, las **positivas que nunca se
+respondieron**. Va despacio (`HIST_PAGINAS_POR_DIA` = 6 páginas de 50
+reseñas y `HIST_RESPUESTAS_POR_DIA` = 8 respuestas al día), siempre
+después de las nuevas, y no aparecen en la cola. Gasta unos 4 créditos de
+Make por página y 3 por respuesta: con el plan gratis, los créditos del mes
+se acaban antes y entonces Make se para hasta el mes siguiente (también
+las nuevas).
+
+**Montarlo en Make** (nuevo escenario):
+
+1. **Webhooks → Custom webhook** → *Add* → `Reseñas antiguas` → copia la
+   dirección → **Run once**.
+2. En la hoja: **Reseñas → 📜 Reseñas antiguas de Google** → pega la
+   dirección (la hoja manda una muestra para que Make aprenda los campos).
+3. **＋** → **Flow Control → Router**.
+4. **Ruta 1** (filtro *accion* = `listar`): **Google Business Profile →
+   Make an API Call** → *Legacy Google My Business API*, `GET`, URL
+   `/v4/accounts/108401907022019746383/locations/{{1.ubicacion}}/reviews`,
+   *Query String* `pageSize` = `50` y `pageToken` = **pageToken** (del
+   webhook) → **JSON → Transform to JSON** con *Object* = **Body** del
+   módulo anterior → **Webhooks → Webhook response**, *Status* `200`,
+   *Body* = **JSON string** del módulo anterior.
+5. **Ruta 2** (filtro *accion* = `responder`): **Google Business Profile →
+   Create/Update a Review Reply** → *Enter manually*, *Review name* =
+   **nombreApi**, *Reply comment* = **respuesta** → **Webhooks → Webhook
+   response**, *Status* `200`, *Body* `{"ok":true}`.
+6. Guarda, actívalo (**ON**, *Immediately*).
+
+El avance se ve en **Reseñas → 📜 Reseñas antiguas de Google**.
 
 ## Compartir la cola con el equipo
 
