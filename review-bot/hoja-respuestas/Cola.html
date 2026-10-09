@@ -57,6 +57,10 @@
   .acciones .prim { flex: 1 1 100%; background: var(--accent); color: var(--accent-text); border-color: var(--accent);
     font-weight: 600; padding: 13px; font-size: 16px; }
   .acciones .sec { flex: 1; }
+  .acciones .prim.hecho { background: var(--ok); border-color: var(--ok); color: var(--ok-text); }
+  .etiqueta { font-size: 13px; color: var(--muted); margin: 8px 0 -2px; }
+  button.traducir { border: 1px solid var(--accent); background: var(--card); color: var(--accent); border-radius: 10px;
+    padding: 8px 12px; font-size: 14px; cursor: pointer; margin-bottom: 4px; }
   button:disabled { opacity: .55; }
   .nota { color: var(--bad); font-size: 13px; font-weight: 600; }
   .panel { display: block; width: 100%; text-align: center; padding: 10px; margin: 0 0 12px; border: 1px dashed var(--line);
@@ -166,6 +170,7 @@
       r.respuesta = s.respuesta;
       r.respuestaEs = s.respuestaEs || '';
       r.aviso = s.aviso || '';
+      r.porTraducir = false;
       if (r.estado === 'Error IA (regenerar)') r.estado = 'Pendiente';
       pintar();
     }, e => { b.disabled = false; b.textContent = texto; aviso('Error: ' + e.message); });
@@ -250,19 +255,72 @@
       const ta = el('textarea');
       ta.value = r.respuesta || '';
       ta.rows = Math.max(3, Math.ceil(ta.value.length / 42));
-      c.appendChild(ta);
-      const es = el('div', 'es', r.respuestaEs ? '🇪🇸 ' + r.respuestaEs : '');
-      if (r.respuestaEs) c.appendChild(es);
-      ta.oninput = () => { r.respuesta = ta.value; es.style.opacity = '.45'; };
+      // En otros idiomas (salvo inglés) se edita en español y se traduce al idioma del cliente.
+      const enEspanol = Boolean(r.respuestaEs) && r.idioma !== 'en';
+      if (enEspanol) {
+        c.appendChild(el('div', 'etiqueta', 'En español (edita aquí)'));
+        const taEs = el('textarea');
+        taEs.value = r.respuestaEs;
+        taEs.rows = Math.max(3, Math.ceil(taEs.value.length / 42));
+        c.appendChild(taEs);
+        const traducir = boton('↻ Traducir al idioma del cliente', 'traducir', e => {
+          const b = e.currentTarget;
+          b.disabled = true;
+          b.textContent = 'Traduciendo…';
+          llamar('colaAccion', [r.id, 'traducir', { texto: taEs.value }], res => {
+            r.respuesta = res.respuesta;
+            r.respuestaEs = res.respuestaEs;
+            r.porTraducir = false;
+            pintar();
+            aviso('Traducida ✔');
+          }, err => { b.disabled = false; b.textContent = '↻ Traducir al idioma del cliente'; aviso('Error: ' + err.message); });
+        });
+        traducir.style.display = r.porTraducir ? '' : 'none';
+        c.appendChild(traducir);
+        taEs.oninput = () => { r.respuestaEs = taEs.value; r.porTraducir = true; traducir.style.display = ''; ta.style.opacity = '.45'; };
+        if (r.porTraducir) ta.style.opacity = '.45';
+        c.appendChild(el('div', 'etiqueta', 'Se publicará así:'));
+        c.appendChild(ta);
+        ta.oninput = () => { r.respuesta = ta.value; };
+      } else {
+        c.appendChild(ta);
+        const es = el('div', 'es', r.respuestaEs ? '🇪🇸 ' + r.respuestaEs : '');
+        if (r.respuestaEs) c.appendChild(es);
+        ta.oninput = () => { r.respuesta = ta.value; es.style.opacity = '.45'; };
+      }
+      // Si se cambió el español y no se tradujo, no se deja publicar el texto viejo.
+      const listo = () => {
+        if (!r.porTraducir) return true;
+        aviso('Has cambiado el texto en español: pulsa "Traducir" antes de publicar.');
+        return false;
+      };
 
-      if (auto && r.plataforma === 'Google') {
-        // Publicación directa en Google; si no se toca, las positivas sin avisos salen solas en horario.
+      if (r.plataforma === 'TripAdvisor') {
+        // TripAdvisor: copiar y abrir no garantiza publicar (hay que hacerlo desde la cuenta de gestión),
+        // así que se confirma aparte.
+        if (!r.copiada) {
+          acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'prim', () => {
+            if (!listo()) return;
+            copiar(ta.value);
+            if (r.url) window.open(r.url, '_blank');
+            r.copiada = true;
+            pintar();
+            aviso('Copiada ✔ Respóndela en TripAdvisor y vuelve a pulsar "Ya está publicada".');
+          }));
+        } else {
+          acciones.appendChild(boton('✓ Ya está publicada', 'prim hecho', () =>
+            cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Publicada ✔', true)));
+          acciones.appendChild(boton('📋 Copiar otra vez', 'sec', () => { copiar(ta.value); aviso('Copiada ✔'); }));
+        }
+      } else if (auto) {
+        // Google con publicación directa; si no se toca, las positivas sin avisos salen solas en horario.
         if (!negativa && !r.aviso && r.estrellas >= auto.minEstrellas) {
           c.appendChild(el('div', 'es', 'Si no la tocas, se publica sola entre las ' + auto.desde + ':00 y las ' +
             auto.hasta + ':00.'));
         }
-        acciones.appendChild(boton('Publicar en Google', 'prim', () => publicarGoogle(r, ta.value)));
+        acciones.appendChild(boton('Publicar en Google', 'prim', () => { if (listo()) publicarGoogle(r, ta.value); }));
         acciones.appendChild(boton('📋 Copiar y abrir', 'sec', () => {
+          if (!listo()) return;
           copiar(ta.value);
           if (r.url) window.open(r.url, '_blank');
           cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
@@ -270,6 +328,7 @@
       } else {
         // Un solo toque: copia, abre la reseña y la pasa a Publicadas (con Deshacer, y "Devolver" en Publicadas).
         acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'prim', () => {
+          if (!listo()) return;
           copiar(ta.value);
           if (r.url) window.open(r.url, '_blank');
           cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
@@ -297,6 +356,7 @@
     }));
     acciones.appendChild(boton('↩ Devolver a pendientes', 'sec', () => {
       const estado = r.estrellas < 4 ? 'A mano (negativa)' : 'Pendiente';
+      r.copiada = false;
       cambiar(r, 'reabrir', '', estado, 'Devuelta a pendientes');
     }));
     c.appendChild(acciones);

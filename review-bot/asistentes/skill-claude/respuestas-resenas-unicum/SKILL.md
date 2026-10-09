@@ -1,6 +1,6 @@
 ---
 name: respuestas-resenas-unicum
-description: Redacta respuestas a reseñas de Google, TripAdvisor u otras plataformas para los restaurantes de Unicum Group en Mallorca (Mercader del Mar, Alma Beach, Amira Great Kebab, Balcón de María, Madre Santa Pizza, Mestiza, Virtus Smash Burger, Pecado 24H, Playas del Rey / N76, Madre Café Bar, Madre Pizza) con el estilo, las keywords y las normas de la casa. Úsala siempre que el usuario pegue reseñas de clientes, pida responder o contestar reseñas u opiniones, o pida un borrador para una reseña negativa de estos locales, aunque no mencione Unicum ni la palabra "skill".
+description: Redacta respuestas a reseñas de Google, TripAdvisor u otras plataformas para los restaurantes de Unicum Group en Mallorca (Mercader del Mar, Alma Beach, Amira Great Kebab, Balcón de María, Madre Santa Pizza, Mestiza, Virtus Smash Burger, Pecado 24H, Playas del Rey / N76) con el estilo, las keywords y las normas de la casa. Úsala siempre que el usuario pegue reseñas de clientes, pida responder o contestar reseñas u opiniones, o pida un borrador para una reseña negativa de estos locales, aunque no mencione Unicum ni la palabra "skill".
 ---
 
 # Respuestas a reseñas · Unicum Group
@@ -47,16 +47,17 @@ Para cada reseña identifica el **restaurante**, la **plataforma**, las
 
 El equipo las evalúa a mano, así que nunca las presentes como definitivas.
 
-- Si el usuario no ha explicado qué pasó, **pregunta primero**. No inventes
-  hechos, causas ni compensaciones.
-- Agradece en pocas palabras, reconoce lo concreto que falló y discúlpate
-  sin excusas ni "pero". Reconoce lo que elogie. Di que lo compartís con el
-  equipo sin inventar medidas.
-- Invita a hablarlo en privado con el contacto de las notas del local
-  (`references/restaurantes.md`); si no hay, directamente con el
-  restaurante. Nunca inventes correos ni teléfonos.
-- No discutas los hechos ni repitas acusaciones graves palabra por palabra.
-  Unas 55 palabras, tono sereno, sin emojis ni exclamaciones.
+- **Muy breves:** dos o tres frases, unas 40 palabras.
+- **Estructura:** discúlpate porque la experiencia no fue la que esperaba,
+  agradece que nos lo haya hecho saber y di que esperas recibirle de nuevo
+  para ofrecerle la atención que merece.
+- **Neutras:** no repitas ni des por buenas sus quejas ni sus palabras
+  (nunca "sentimos haberle atendido fatal"), no detalles lo ocurrido, no
+  des explicaciones ni discutas.
+- **No invites a contactar** ni a escribir en privado, y no prometas
+  cambios ni compensaciones. Si el usuario te cuenta qué pasó, puedes
+  apoyarte en ello.
+- Sin emojis ni exclamaciones.
 
 ## Evita siempre
 
@@ -92,10 +93,9 @@ mediterráneo con terraza con vistas al mar, paellas y mariscos frescos,
 abierto todo el año, nos alegra…"* Está en el idioma equivocado, abre con
 la fórmula de siempre y mete keywords a presión.
 
-Reseña (Madre Pizza, 2★, español): *"Esperamos más de una hora a que nos
+Reseña (Madre Santa Pizza, 2★, español): *"Esperamos más de una hora a que nos
 tomaran nota y la pizza llegó fría."*
 
-Bien (borrador): *"Gracias por contárnoslo. Una hora de espera y una pizza
-fría no es lo que queremos para nadie, y lo sentimos. Lo hemos compartido
-con el equipo para revisarlo. Si quieres, cuéntanoslo con más detalle
-llamando directamente al restaurante."*
+Bien (borrador): *"Sentimos que tu visita no fuera como esperabas y te
+agradecemos que nos lo hayas hecho saber. Esperamos recibirte de nuevo y
+ofrecerte la atención que mereces."*

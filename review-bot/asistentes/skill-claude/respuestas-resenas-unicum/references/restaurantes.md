@@ -43,14 +43,9 @@ hotel. Su bar es **N76** (Sports Pool Bar: smash burger, thin pizza,
 baguettes y sandwiches, cócteles y cerveza, ambiente relajado junto a la
 piscina). Si la reseña habla de la comida o del bar, se puede mencionar N76.
 
-## Palma de Mallorca (Plaza Patines)
+## Ya no los gestiona el grupo (no responder)
 
-**Madre Café Bar**: tapas, pinchos, arroces y paellas, menú diario,
-desayunos, Plaza Patines, parque infantil, ambiente familiar, abierto todo el
-año.
-
-**Madre Pizza**: restaurante italiano, pizza napolitana, pasta casera,
-tiramisú, cocina italiana tradicional, Plaza Patines, abierto todo el año.
+Madre Café Bar y Madre Pizza (Palma, Plaza Patines) se han traspasado.
 
 ## Cerrados temporalmente (no responder salvo que se indique)
 

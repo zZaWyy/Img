@@ -20,7 +20,8 @@ estilo de la casa. Publicas desde el móvil con dos toques.
 - **Detecta problemas escondidos:** si una reseña de 5★ dice *"todo genial
   pero el café llegó frío"*, la marca **Revisar ⚠** con el motivo.
 - **Negativas (1-3★):** **aviso por correo al momento** y un borrador
-  prudente (se disculpa, no inventa causas, invita a hablar en privado).
+  breve y neutro: se disculpa, agradece que nos lo cuente y espera
+  recibirle de nuevo, sin repetir sus quejas ni invitar a contactar.
   Siempre se revisan antes de publicar; si le cuentas qué pasó, te propone
   otro mejor.
 - **Respuesta en español:** si el borrador está en otro idioma, debajo (y
@@ -92,11 +93,9 @@ TripAdvisor y comprueba que abren el local correcto. Si alguno falla, pega
 la dirección buena. Aquí se cambian también **keywords y notas**, o se
 desactiva un local (Activo = No).
 
-**Contacto para quejas:** en *Notas*, añade el correo o teléfono al que
-pueden escribir los clientes descontentos (por ejemplo, `Contacto para
-quejas: reservas@…`). Las respuestas a negativas lo usarán; si no hay
-ninguno, invitan a contactar directamente con el restaurante. La IA nunca
-se inventa un contacto.
+**Locales que ya no gestionáis:** pon *Activo* = **No**. Dejan de leerse,
+redactarse, publicarse y de salir en la cola y en los informes. (Madre Café
+Bar y Madre Pizza ya están desactivados por el traspaso.)
 
 ### Paso 5: Primera lectura
 
@@ -144,6 +143,12 @@ momento, sin pantallas de carga.
   Las que tienen borde naranja mencionan algo a revisar: el aviso dice qué.
 - **↻ Otra versión:** la reescribe al momento. Para cambiar algo concreto,
   edita el texto directamente.
+- **En otros idiomas** (salvo inglés) se edita **en español**: cambia el
+  texto de arriba y pulsa **Traducir al idioma del cliente**; abajo verás
+  cómo quedará publicada.
+- **TripAdvisor:** *Copiar y abrir* copia la respuesta y abre la reseña;
+  respóndela desde vuestra cuenta de gestión y vuelve a pulsar **✓ Ya está
+  publicada**. TripAdvisor no permite publicar automáticamente.
 - **Negativas:** lee el borrador con calma. Si sabes qué pasó, **✍ Otro
   borrador** → cuéntaselo → revisa y publica tú.
 - **Publicadas:** lo respondido en los últimos 60 días.

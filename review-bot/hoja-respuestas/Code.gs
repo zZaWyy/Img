@@ -143,10 +143,6 @@ const RESTAURANTES_INICIALES = [
   ['Sí', 'Playas del Rey', 'Santa Ponsa', 'https://maps.google.com/?cid=2155032086752323594', 'https://www.tripadvisor.com/Hotel_Review-g562815-d272932-Reviews-Playas_del_Rey_Hotel-Santa_Ponsa_Calvia_Majorca_Balearic_Islands.html',
     'hotel en Santa Ponsa, buena ubicación, cerca de la playa, hotel céntrico, desayuno incluido, piscina',
     'Es un HOTEL, no un restaurante: responder como el equipo del hotel. Su bar es N76 (Sports Pool Bar: smash burger, thin pizza, baguettes y sandwiches, cócteles y cerveza, ambiente relajado junto a la piscina); si la reseña habla de la comida o del bar, se puede mencionar N76 con naturalidad.'],
-  ['Sí', 'Madre Café Bar', 'Palma de Mallorca', 'https://maps.google.com/?cid=975611850967119471', 'https://www.tripadvisor.com/Restaurant_Review-g187463-d26725569-Reviews-Madre_Cafe_Bar_Tapas_Burger-Palma_de_Mallorca_Majorca_Balearic_Islands.html',
-    'tapas, pinchos, arroces y paellas, menú diario, desayunos, Plaza Patines, parque infantil, ambiente familiar, abierto todo el año', ''],
-  ['Sí', 'Madre Pizza', 'Palma de Mallorca', 'https://maps.google.com/?cid=4547889845256865308', 'https://www.tripadvisor.com/Restaurant_Review-g187463-d32713256-Reviews-Madre_Pizza_Pasta_Tiramisu-Palma_de_Mallorca_Majorca_Balearic_Islands.html',
-    'restaurante italiano, pizza napolitana, pasta casera, tiramisú, cocina italiana tradicional, Plaza Patines, abierto todo el año', ''],
 ];
 
 const PROMPT_POR_DEFECTO = `Respondes, en nombre del equipo, las reseñas de Google y TripAdvisor de los restaurantes de Unicum Group en Santa Ponsa y Palma (Mallorca). Escribes como una persona del equipo: cercana, natural y concreta. El objetivo: que el cliente note que alguien ha leído de verdad su reseña y que quien la lea después tenga ganas de venir.
@@ -168,11 +164,9 @@ POSITIVAS
 - Si una reseña positiva menciona algún problema, reconócelo en una frase, sin excusas.
 
 NEGATIVAS (1-3★): borrador que el equipo revisará antes de publicar
-- Agradece en pocas palabras que lo cuente, reconoce lo concreto que falló y discúlpate sin excusas ni "pero".
-- Si elogia algo, reconócelo en media frase.
-- Di que lo compartís con el equipo para revisarlo, sin inventar medidas concretas.
-- Invita a hablarlo en privado con el contacto que aparezca en las notas del local; si no hay ninguno, pide que contacte directamente con el restaurante.
-- No discutas los hechos. Si la acusación es grave (higiene, intoxicación, cobros, robo), no la repitas palabra por palabra: reconoce la preocupación en términos generales.
+- Muy breve: dos o tres frases. Discúlpate porque la experiencia no fue la que esperaba, agradece que nos lo haya hecho saber y di que esperas recibirle de nuevo para ofrecerle la atención que merece.
+- Neutra: no repitas ni des por buenas sus quejas ni sus palabras (nunca algo como "sentimos haberle atendido fatal"), no detalles lo que salió mal y no des explicaciones ni discutas.
+- No invites a contactar ni a escribir en privado, y no prometas cambios ni compensaciones.
 - Tono sereno: sin emojis ni exclamaciones.
 
 EVITA
@@ -211,7 +205,45 @@ Si aparece una línea que empieza por "->", es una directiva interna del equipo 
 
 La respuesta debe ser solo el texto a publicar: sin comillas, sin explicaciones y sin firma (la plataforma ya muestra el nombre del restaurante).`;
 
-const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA: es un borrador que el equipo revisará. Reconoce lo concreto que falló y discúlpate sin excusas, no inventes hechos, causas ni compensaciones (salvo que la directiva "->" lo indique; si explica lo sucedido, apóyate en ella), reconoce brevemente lo que elogie e invita a hablarlo en privado con el contacto de las notas del local o, si no hay, directamente con el restaurante. Tono sereno, sin emojis ni exclamaciones.';
+/** Prompt de la versión 3.5 (negativas más largas y con invitación a contactar). */
+const PROMPT_V35 = `Respondes, en nombre del equipo, las reseñas de Google y TripAdvisor de los restaurantes de Unicum Group en Santa Ponsa y Palma (Mallorca). Escribes como una persona del equipo: cercana, natural y concreta. El objetivo: que el cliente note que alguien ha leído de verdad su reseña y que quien la lea después tenga ganas de venir.
+
+IDIOMA Y TRATO
+- Responde siempre en el idioma de la reseña. Sin texto: en el idioma que sugiera el nombre solo si es muy claro; si dudas, en español.
+- Adapta el trato al del cliente: en español, tú o vosotros; si escribe en plural ("fuimos", "we"), responde en plural. En alemán, francés y neerlandés, usa la forma de cortesía salvo que el cliente tutee.
+- Usa el nombre de pila si parece un nombre real; si es un alias o unas iniciales, no lo uses.
+
+LONGITUD
+- Respeta la longitud máxima que se indica con cada reseña: es lo más importante. Mejor corta y concreta que larga y genérica.
+- Nunca más larga que la propia reseña, salvo en reseñas sin texto o de pocas palabras.
+
+POSITIVAS
+- Recoge uno o dos detalles concretos de la reseña (un plato, una persona, un momento). Si nombra a alguien del equipo, di que se lo haréis llegar.
+- Agradece con naturalidad, sin fórmulas. Invita a volver solo si queda natural y varía la forma de hacerlo.
+- Keywords: como mucho una, y solo si el cliente habla de ese tema (si menciona la paella, puedes decir "paella"). No añadas temas que no ha mencionado (vistas, terraza, cocina mediterránea…). Si respondes en otro idioma, tradúcela.
+- Emojis: como mucho uno, y solo si la reseña es entusiasta.
+- Si una reseña positiva menciona algún problema, reconócelo en una frase, sin excusas.
+
+NEGATIVAS (1-3★): borrador que el equipo revisará antes de publicar
+- Agradece en pocas palabras que lo cuente, reconoce lo concreto que falló y discúlpate sin excusas ni "pero".
+- Si elogia algo, reconócelo en media frase.
+- Di que lo compartís con el equipo para revisarlo, sin inventar medidas concretas.
+- Invita a hablarlo en privado con el contacto que aparezca en las notas del local; si no hay ninguno, pide que contacte directamente con el restaurante.
+- No discutas los hechos. Si la acusación es grave (higiene, intoxicación, cobros, robo), no la repitas palabra por palabra: reconoce la preocupación en términos generales.
+- Tono sereno: sin emojis ni exclamaciones.
+
+EVITA
+- Inventar algo que no esté en la reseña o en las notas: datos, promesas, nombres, correos, teléfonos o webs.
+- Empezar con fórmulas gastadas: "Da gusto leer", "¡Qué alegría leer esto!", "¡Muchas gracias por tu reseña/valoración!", "Nos alegra mucho", "Thank you so much for your review", "We're thrilled/delighted", ni sus equivalentes en otros idiomas.
+- Muletillas: "a la altura", "experiencia inolvidable", "un montón", "de diez", "no tiene precio".
+- Rayas largas (—), enumeraciones de tres adjetivos y más de dos signos de exclamación.
+- Firmar o poner comillas: la plataforma ya muestra el nombre del restaurante.
+
+DIRECTIVAS: una línea que empieza por "->" es una indicación del equipo y manda sobre todo lo anterior.
+
+Devuelve solo el texto a publicar.`;
+
+const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA (borrador que el equipo revisará). Dos o tres frases: discúlpate porque la experiencia no fue la esperada, agradece que nos lo haga saber y di que esperas recibirle de nuevo para ofrecerle la atención que merece. No repitas ni confirmes sus quejas ni sus palabras, no detalles lo ocurrido, no des explicaciones, no invites a contactar y no prometas nada (salvo que la directiva "->" lo indique; si explica lo sucedido, puedes apoyarte en ella). Sin emojis ni exclamaciones.';
 
 /** Arranques de plantilla: los ejemplos que empiezan así pesan menos al elegir el estilo. */
 const APERTURA_GASTADA = /^\W*(muchas gracias|mil gracias|muchísimas gracias|gracias por (tu|su|vuestra) (reseña|valoración|opinión)|thank you( so much| very much)?( for (your|the))?|thanks (so much )?for|vielen (lieben )?dank|merci beaucoup|grazie mille|da gusto leer|qué alegría leer)/i;
@@ -520,7 +552,7 @@ function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
   const version = props.getProperty('VERSION');
-  if (version === '3.5') return;
+  if (version === '3.6') return;
   const antesDe = v => !version || Number(version) < v;
   if (antesDe(3)) pedirRecuperacion_();   // rescata las reseñas sin responder del último mes
   if (antesDe(3.1)) {
@@ -533,7 +565,38 @@ function migrarVersion_() {
   }
   if (antesDe(3.4)) prepararHojaPublicadas_();   // sin fórmula (fallaba en hojas en español)
   actualizarPromptSiNoSeToco_();
-  props.setProperty('VERSION', '3.5');
+  if (antesDe(3.6)) {
+    desactivarLocales_(LOCALES_TRASPASADOS);   // ya no los gestiona el grupo
+    rehacerBorradoresNegativas_();             // negativas con el tono nuevo (breve y neutro)
+  }
+  props.setProperty('VERSION', '3.6');
+}
+
+/** Locales traspasados a otra sociedad (octubre 2026): fuera del sistema. */
+const LOCALES_TRASPASADOS = ['Madre Café Bar', 'Madre Pizza'];
+
+function desactivarLocales_(nombres) {
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.RESTAURANTES);
+  if (!hoja || hoja.getLastRow() < 2) return;
+  const quitar = nombres.map(normalizar_);
+  hoja.getRange(2, 1, hoja.getLastRow() - 1, 2).getValues().forEach((f, i) => {
+    if (quitar.indexOf(normalizar_(f[CR.NOMBRE - 1])) >= 0) hoja.getRange(i + 2, CR.ACTIVO).setValue('No');
+  });
+}
+
+/** Vacía los borradores de negativas sin publicar (sin indicación del equipo) para redactarlos de nuevo. */
+function rehacerBorradoresNegativas_() {
+  conBloqueo_(() => {
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    if (hoja.getLastRow() < 2) return;
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues().forEach((f, i) => {
+      if (f[COL.ESTADO - 1] !== ESTADO.MANO || !f[COL.RESPUESTA - 1] || f[COL.INSTRUCCION - 1]) return;
+      hoja.getRange(i + 2, COL.RESPUESTA).setValue('');
+      hoja.getRange(i + 2, COL.AVISO).setValue('');
+      hoja.getRange(i + 2, COL.MODELO).setValue('');
+      hoja.getRange(i + 2, COL.RESP_ES).setValue('');
+    });
+  });
 }
 
 /** Pone el prompt nuevo en la pestaña Prompt, solo si nadie había cambiado el anterior. */
@@ -541,7 +604,7 @@ function actualizarPromptSiNoSeToco_() {
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.PROMPT);
   if (!hoja) return;
   const actual = String(hoja.getRange(2, 1).getValue() || '').trim();
-  if (actual && actual !== PROMPT_V3.trim()) return; // editado por el equipo: se respeta
+  if (actual && actual !== PROMPT_V3.trim() && actual !== PROMPT_V35.trim()) return; // editado por el equipo: se respeta
   hoja.getRange(2, 1).setValue(PROMPT_POR_DEFECTO);
 }
 
@@ -819,8 +882,9 @@ function generarPendientes_(inicio) {
   try {
     const contexto = cargarContexto_();
     // Primero las negativas (más urgentes), luego las positivas.
+    const inactivos = new Set(contexto.restaurantes.filter(r => !r.activo).map(r => normalizar_(r.nombre)));
     const sinBorrador = estado => contexto.filas.filter(f => f[COL.ESTADO - 1] === estado &&
-      !f[COL.RESPUESTA - 1] && !f[COL.AVISO - 1]);
+      !f[COL.RESPUESTA - 1] && !f[COL.AVISO - 1] && !deLocalInactivo_(f, inactivos));
     const pendientes = (CONFIG.BORRADOR_NEGATIVAS ? sinBorrador(ESTADO.MANO) : [])
       .concat(sinBorrador(ESTADO.PENDIENTE));
     let hechos = 0;
@@ -882,6 +946,34 @@ function generarPendientes_(inicio) {
   } finally {
     props.deleteProperty('GENERANDO_HASTA');
   }
+}
+
+/**
+ * El equipo edita la respuesta en español desde la cola y aquí se traduce al
+ * idioma del cliente. Guarda las dos versiones en la hoja.
+ */
+function traducirDesdeEspanol_(id, textoEs) {
+  textoEs = String(textoEs || '').trim();
+  if (!textoEs) throw new Error('No hay texto en español que traducir.');
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  const n = filaPorId_(hoja, id);
+  if (!n) throw new Error('Esa reseña ya no está en la hoja.');
+  const f = hoja.getRange(n, 1, 1, CABECERA.length).getValues()[0];
+  const actual = String(f[COL.RESPUESTA - 1] || '');
+  const codigo = String(f[COL.IDIOMA - 1] || '') || idiomaProbable_(actual);
+  const destino = codigo ? nombreIdioma_(codigo)
+    : 'el mismo idioma en que está escrito este texto de referencia: "' + recortar_(actual, 300) + '"';
+  const traducido = String(llamarIA_('Traduce al ' + destino + ' el texto que te paso: es la respuesta de un ' +
+    'restaurante a la reseña de un cliente. Mantén el tono cercano y natural, el trato (tú/usted) y los nombres; ' +
+    'no añadas ni quites nada. Devuelve solo la traducción.', textoEs, 0, ESQUEMA_TRADUCCION).traduccion || '').trim();
+  if (!traducido) throw new Error('La IA no devolvió la traducción. Prueba otra vez.');
+  conBloqueo_(() => {
+    const m = filaPorId_(hoja, id);
+    if (!m) return;
+    hoja.getRange(m, COL.RESPUESTA).setValue(traducido);
+    hoja.getRange(m, COL.RESP_ES).setValue(textoEs);
+  });
+  return { respuesta: traducido, respuestaEs: textoEs };
 }
 
 function traducirAlEspanol_(texto) {
@@ -1053,7 +1145,7 @@ function redactar_(fila, contexto, instruccion, manual) {
 function palabrasObjetivo_(texto, estrellas) {
   const n = String(texto || '').split(/\s+/).filter(Boolean).length;
   const tope = !n ? 20 : n < 15 ? 30 : n < 40 ? 45 : n < 90 ? 65 : 90;
-  return estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR ? Math.max(tope, 55) : tope;
+  return estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR ? 40 : tope; // negativas: siempre breves
 }
 
 const NOMBRES_IDIOMA = {
@@ -1367,8 +1459,9 @@ function publicarAutomaticas_() {
   const hoja = hoja_(HOJA.RESPUESTAS);
   if (hoja.getLastRow() < 2) return;
   const ahora = Date.now();
+  const inactivos = localesInactivos_();
   const candidatas = hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues()
-    .filter(f => publicableSola_(f, ahora))
+    .filter(f => publicableSola_(f, ahora) && !deLocalInactivo_(f, inactivos))
     .reverse()   // la hoja va de más reciente a más antigua
     .slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
   for (const f of candidatas) {
@@ -1394,6 +1487,7 @@ function publicarFila_(id, texto) {
   const respuesta = String(texto || f[COL.RESPUESTA - 1] || '').trim();
   if (!respuesta) throw new Error('No hay respuesta que publicar.');
   const rest = buscarRestaurantePorNombre_(leerRestaurantes_(), f[COL.RESTAURANTE - 1]);
+  if (rest && !rest.activo) throw new Error('Ese local está desactivado en la pestaña Restaurantes: no se publica.');
   const cid = (rest && rest.cid) || '';
   const res = UrlFetchApp.fetch(url, {
     method: 'post',
@@ -1465,12 +1559,15 @@ function colaDatos() {
   if (ultima < 2) return JSON.stringify({ resenas: [], hoja: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
   const filas = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
   const enlaces = hoja.getRange(2, COL.ENLACE, ultima - 1, 1).getRichTextValues();
+  const inactivos = localesInactivos_();
   const resenas = filas
     .map((f, i) => ({ f: f, url: (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '' }))
+    .filter(x => !deLocalInactivo_(x.f, inactivos))
     .filter(x => ESTADOS_ABIERTOS.indexOf(x.f[COL.ESTADO - 1]) >= 0)
     .slice(0, 300)
     .concat(filas
       .map((f, i) => ({ f: f, url: (enlaces[i][0] && enlaces[i][0].getLinkUrl()) || '' }))
+      .filter(x => !deLocalInactivo_(x.f, inactivos))
       .filter(x => (x.f[COL.ESTADO - 1] === ESTADO.PUBLICADA || x.f[COL.ESTADO - 1] === ESTADO.ENVIADA) &&
         fecha_(x.f[COL.FECHA - 1]).getTime() > Date.now() - 60 * DIA)
       .slice(0, 150))
@@ -1501,6 +1598,7 @@ function colaDatos() {
 function colaAccion(id, accion, datos) {
   datos = datos || {};
   if (accion === 'rehacerTodo') return { cuantos: vaciarBorradores_() };
+  if (accion === 'traducir') return traducirDesdeEspanol_(id, datos.texto);
   if (accion === 'publicarYa') {
     const estado = publicarFila_(id, datos.texto);
     conBloqueo_(actualizarHojaPublicadas_);
@@ -1566,7 +1664,9 @@ function enviarResumenSiToca_() {
   if (ultima < 2) return;
   const cuenta = {};
   let total = 0;
+  const inactivos = localesInactivos_();
   hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues().forEach(f => {
+    if (deLocalInactivo_(f, inactivos)) return;
     const estado = f[COL.ESTADO - 1];
     if (ESTADOS_ABIERTOS.indexOf(estado) < 0) return;
     const r = f[COL.RESTAURANTE - 1];
@@ -1658,7 +1758,8 @@ function enviarInforme_() {
   if (ultima < 2) return false;
   const ahora = Date.now();
   const corte = ahora - 7 * DIA;
-  const filas = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues();
+  const inactivos = localesInactivos_();
+  const filas = hoja.getRange(2, 1, ultima - 1, CABECERA.length).getValues().filter(f => !deLocalInactivo_(f, inactivos));
   const momento = f => fecha_(f[COL.FECHA - 1]).getTime();
   const semana = filas.filter(f => momento(f) >= corte);
   if (!semana.length) return false;
@@ -1904,6 +2005,15 @@ function leerPrompt_() {
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.PROMPT);
   const texto = hoja ? String(hoja.getRange(2, 1).getValue() || '').trim() : '';
   return texto || PROMPT_POR_DEFECTO;
+}
+
+/** Nombres (normalizados) de los locales con Activo = No: no se redactan, publican ni muestran. */
+function localesInactivos_() {
+  return new Set(leerRestaurantes_().filter(r => !r.activo).map(r => normalizar_(r.nombre)));
+}
+
+function deLocalInactivo_(f, inactivos) {
+  return inactivos.has(normalizar_(f[COL.RESTAURANTE - 1]));
 }
 
 function leerRestaurantes_() {
