@@ -410,6 +410,7 @@ function onOpen() {
     .addItem('💳 Gemini de pago: activar / desactivar', 'alternarGeminiPago')
     .addItem('🤖 Publicación automática en Google', 'configurarPublicacion')
     .addItem('📜 Reseñas antiguas de Google', 'configurarHistorico')
+    .addItem('📊 Créditos de Make', 'verCreditosMake')
     .addItem('💶 Ver gasto de Apify', 'mostrarGastoApify')
     .addItem('🔑 Cambiar claves', 'cambiarClaves')
     .addItem('⚙ Instalar / reparar', 'instalar')
@@ -747,6 +748,7 @@ function ciclo() {
   generarPendientes_(inicio);
   try { publicarAutomaticas_(); } catch (e) { avisarError_('publicar', 'Fallo en la publicación automática: ' + (e.message || e)); }
   try { leerHistorico_(); } catch (e) { avisarError_('historico', 'Fallo leyendo reseñas antiguas: ' + (e.message || e)); }
+  try { vigilarCreditosMake_(); } catch (e) { console.warn('Créditos de Make: ' + e); }
   enviarResumenSiToca_();
   try { conBloqueo_(actualizarHojaPublicadas_); } catch (e) { console.warn('publicadas: ' + e); }
 }
@@ -1721,14 +1723,62 @@ function cicloMake_(ahora) {
 }
 
 /** Créditos que la hoja ha hecho gastar a Make en el ciclo actual (estimación). */
-function usoMake_() {
+function usoLocalMake_() {
   const c = cicloMake_(Date.now());
   const u = JSON.parse(PropertiesService.getScriptProperties().getProperty('MAKE_USO') || '{}');
   return Object.assign(u.ciclo === c.ciclo ? u : { creditos: 0, nuevas: 0 }, c);
 }
 
+/**
+ * Créditos de Make del ciclo: los reales si hay token de la API de Make (cuentan
+ * todo lo que usa Make, también otros escenarios), si no, la estimación de la hoja.
+ */
+function usoMake_() {
+  const u = Object.assign(usoLocalMake_(), { mes: CONFIG.MAKE_CREDITOS_MES, real: false });
+  const r = creditosMakeReales_();
+  if (!r) return u;
+  return Object.assign(u, { creditos: r.usados, mes: r.mes, inicio: r.inicio, fin: r.fin, real: true });
+}
+
+/** Lee de la API de Make los créditos gastados del ciclo (con caché de 10 minutos). null si no se puede. */
+function creditosMakeReales_() {
+  const token = PropertiesService.getScriptProperties().getProperty('MAKE_API_TOKEN');
+  if (!token) return null;
+  const cache = CacheService.getScriptCache();
+  const guardado = cache.get('MAKE_REAL');
+  if (guardado) return JSON.parse(guardado);
+  try {
+    const r = leerOrganizacionMake_(token);
+    cache.put('MAKE_REAL', JSON.stringify(r), 600);
+    return r;
+  } catch (e) {
+    console.warn('No se pudieron leer los créditos de Make: ' + e);
+    return null;
+  }
+}
+
+function leerOrganizacionMake_(token) {
+  const hook = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK') || '';
+  const zona = (/^https:\/\/hook\.([a-z0-9]+)\.make\.com/.exec(hook) || [])[1] || 'eu1';
+  const api = ruta => {
+    const res = UrlFetchApp.fetch('https://' + zona + '.make.com/api/v2/' + ruta,
+      { headers: { Authorization: 'Token ' + token }, muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) throw new Error('Make respondió ' + res.getResponseCode());
+    return JSON.parse(res.getContentText());
+  };
+  const orgs = api('organizations').organizations || [];
+  if (!orgs.length) throw new Error('el token no ve ninguna organización');
+  const o = api('organizations/' + orgs[0].id).organization || {};
+  const usados = o.centicreditsConsumed !== undefined ? Number(o.centicreditsConsumed) / 100 : Number(o.operations);
+  const mes = Number((o.license || {}).operations) || CONFIG.MAKE_CREDITOS_MES;
+  const inicio = Date.parse(o.lastReset);
+  const fin = Date.parse(o.nextReset);
+  if (!isFinite(usados) || !isFinite(inicio) || !isFinite(fin)) throw new Error('respuesta de Make inesperada');
+  return { usados: Math.round(usados), mes: mes, inicio: inicio, fin: fin };
+}
+
 function apuntarCreditosMake_(creditos, nueva) {
-  const u = usoMake_();
+  const u = usoLocalMake_();
   u.creditos += creditos;
   if (nueva) u.nuevas++;
   PropertiesService.getScriptProperties().setProperty('MAKE_USO',
@@ -1746,7 +1796,7 @@ function estimarUsoMakeAnterior_() {
   const n = hoja.getLastRow() - 1;
   const filas = hoja.getRange(2, 1, n, CABECERA.length).getValues();
   const notas = hoja.getRange(2, COL.ESTADO, n, 1).getNotes();
-  const u = usoMake_();
+  const u = usoLocalMake_();
   let creditos = 0, nuevas = 0;
   filas.forEach((f, i) => {
     const m = /Publicada automáticamente el (\d\d)\/(\d\d)\/(\d{4})/.exec(notas[i][0] || '');
@@ -1773,7 +1823,63 @@ function creditosSobrantes_() {
   const quedan = Math.max(0, (u.fin - ahora) / DIA);
   const ritmo = Math.max(CONFIG.MAKE_NUEVAS_POR_DIA, u.nuevas / dias);
   const reserva = ritmo * CONFIG.MAKE_CREDITOS_POR_NUEVA * quedan * 1.2;
-  return Math.floor(CONFIG.MAKE_CREDITOS_MES - u.creditos - reserva);
+  return Math.floor(u.mes - u.creditos - reserva);
+}
+
+/**
+ * Con los créditos reales, avisa (como mucho dos veces al día) si no llegan para
+ * publicar las nuevas hasta la renovación: si Make se queda sin créditos, las
+ * respuestas no se publican solas y hay que hacerlas a mano.
+ */
+function vigilarCreditosMake_() {
+  if (!publicacionActiva_()) return;
+  const u = usoMake_();
+  if (!u.real) return;
+  const ahora = Date.now();
+  const quedan = Math.max(0, (u.fin - ahora) / DIA);
+  const ritmo = Math.max(CONFIG.MAKE_NUEVAS_POR_DIA, u.nuevas / Math.max(1, (ahora - u.inicio) / DIA));
+  const necesarios = Math.round(ritmo * CONFIG.MAKE_CREDITOS_POR_NUEVA * quedan);
+  const restantes = u.mes - u.creditos;
+  if (restantes >= necesarios) return;
+  avisarError_('creditos-make', 'Make: quedan ' + Math.max(0, restantes) + ' créditos de ' + u.mes + ' hasta el ' +
+    Utilities.formatDate(new Date(u.fin), ZONA, 'dd/MM') + ', y publicar las reseñas nuevas hasta entonces ' +
+    'necesitará unos ' + necesarios + '. Si se acaban, las respuestas no se publicarán solas (habrá que hacerlas ' +
+    'a mano desde la cola). Todo lo que se hace con Make gasta de los mismos créditos (también las fichas y los posts).');
+}
+
+/** Menú: créditos de Make (reales con un token de la API de Make, o estimados). */
+function verCreditosMake() {
+  const ui = SpreadsheetApp.getUi();
+  const props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('MAKE_API_TOKEN')) {
+    const r = ui.prompt('Créditos de Make',
+      'Para ver los créditos reales (también lo que gastan otros escenarios), pega un token de la API de Make:\n' +
+      'Make → tu foto (abajo a la izquierda) → Profile → API access → Add token → marca solo "organizations:read" → Save.\n\n' +
+      '(Cancelar = ver la estimación de la hoja)', ui.ButtonSet.OK_CANCEL);
+    const token = r.getSelectedButton() === ui.Button.OK ? r.getResponseText().trim() : '';
+    if (token) {
+      try {
+        leerOrganizacionMake_(token);
+        props.setProperty('MAKE_API_TOKEN', token);
+        CacheService.getScriptCache().remove('MAKE_REAL');
+      } catch (e) {
+        ui.alert('Ese token no funciona (' + (e.message || e) + '). Revisa que tenga el permiso "organizations:read".');
+        return;
+      }
+    }
+  }
+  const u = usoMake_();
+  const sobran = creditosSobrantes_();
+  const r = ui.alert('Créditos de Make (' + (u.real ? 'reales' : 'estimados por la hoja') + ')\n\n' +
+    'Gastados: ' + u.creditos + ' de ' + u.mes + '. Se renuevan el ' +
+    Utilities.formatDate(new Date(u.fin), ZONA, 'dd/MM') + '.\n' +
+    (sobran > 0 ? 'Después de reservar los de las reseñas nuevas, sobran unos ' + sobran + ' (para las antiguas).'
+      : 'No sobran: se reservan para publicar las reseñas nuevas; las antiguas esperan.') +
+    (u.real ? '\n\n¿Quitar el token de Make?' : ''), u.real ? ui.ButtonSet.YES_NO : ui.ButtonSet.OK);
+  if (u.real && r === ui.Button.YES) {
+    props.deleteProperty('MAKE_API_TOKEN');
+    CacheService.getScriptCache().remove('MAKE_REAL');
+  }
 }
 
 function configurarHistorico() {
@@ -1792,8 +1898,8 @@ function configurarHistorico() {
     const u = usoMake_();
     const sobran = creditosSobrantes_();
     const r = ui.alert('Reseñas antiguas: ACTIVADO\n\n' + lineas.join('\n') + '\n\nYa respondidas: ' + respondidas +
-      '\n\nCréditos de Make este ciclo (hasta el ' + Utilities.formatDate(new Date(u.fin), ZONA, 'dd/MM') + '): unos ' +
-      u.creditos + ' de ' + CONFIG.MAKE_CREDITOS_MES + '. ' + (sobran > 0
+      '\n\nCréditos de Make este ciclo (hasta el ' + Utilities.formatDate(new Date(u.fin), ZONA, 'dd/MM') + '): ' +
+      (u.real ? '' : 'unos ') + u.creditos + ' de ' + u.mes + '. ' + (sobran > 0
         ? 'Para las antiguas quedan unos ' + sobran + ' sin tocar los de las nuevas.'
         : 'Ahora mismo no sobran: las antiguas esperan para no gastar los créditos de las nuevas.') +
       '\n\n¿Quieres desactivarlo?', ui.ButtonSet.YES_NO);

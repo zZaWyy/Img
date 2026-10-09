@@ -308,6 +308,22 @@ Si hubiera que rehacerlo, el escenario es:
 
 El avance se ve en **Reseñas → 📜 Reseñas antiguas de Google**.
 
+## Créditos de Make
+
+Todo lo que se hace con Make gasta de los mismos créditos (1.000 al mes en el
+plan gratis): publicar las nuevas (unos 5 por reseña), las antiguas y
+cualquier otro uso, como consultar fichas o publicar posts. La hoja reserva
+los que necesitarán las reseñas nuevas hasta la renovación.
+
+Para que vea los créditos **reales** (y no solo lo que gasta ella):
+**Reseñas → 📊 Créditos de Make** → pega un token de la API de Make (Make →
+tu foto, abajo a la izquierda → *Profile* → *API access* → *Add token* →
+marca solo `organizations:read` → *Save*). Con el token, además, llega un
+correo si los créditos no van a llegar para publicar las nuevas hasta la
+renovación. Si se acabaran, las respuestas no se publican solas y hay que
+hacerlas a mano desde la cola. Con un plan de pago de Make (10.000 créditos)
+no hay que tocar nada: la hoja lo lee del token.
+
 ## Compartir la cola con el equipo
 
 Dos formas; elegid una.
