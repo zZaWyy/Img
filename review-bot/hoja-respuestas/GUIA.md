@@ -252,6 +252,10 @@ Google** para publicarlas al momento. Horario y condiciones: `PUBLICAR_*`,
    exista.
 8. **＋** → **Webhooks → Webhook response** → *Status* `200`, *Body*
    `{"ok":true}`.
+   - En los dos módulos de Google, **clic derecho → Add error handler →
+     Webhook response → Skip**: *Status* `503` en el de leer reseñas (la hoja
+     lo reintenta en la siguiente vuelta) y `422` en el de responder (la deja
+     para hacerla a mano). Así Make no apaga el escenario por errores seguidos.
 9. Guarda 💾, activa el escenario (**ON**) con **Immediately as data
    arrives**.
 10. Prueba: en la cola, en una reseña de Google, pulsa **Publicar en
