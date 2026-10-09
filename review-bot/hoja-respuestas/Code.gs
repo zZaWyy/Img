@@ -1151,16 +1151,30 @@ function redactar_(fila, contexto, instruccion, manual) {
 
   // Comprobación de idioma (salvo que el equipo haya dado una indicación propia).
   const comprobar = lengua && !instruccion && texto.length >= 20;
-  if (!comprobar || !idiomaDistinto_(idioma, salida.respuesta)) return salida;
+  if (!comprobar || !idiomaDistinto_(idioma, salida.respuesta)) return avisarSiCortada_(salida);
   try {
     const otra = llamarIA_(contexto.prompt, p.join('\n') + '\n-> IMPORTANTE: tu respuesta anterior no estaba en ' +
       lengua + '. Escríbela entera en ' + lengua + '.', 0);
-    if (!idiomaDistinto_(idioma, otra.respuesta)) return otra;
+    if (!idiomaDistinto_(idioma, otra.respuesta)) return avisarSiCortada_(otra);
   } catch (e) {
     if (e.tipo === 'clave') throw e;
   }
   salida.aviso = (salida.aviso ? salida.aviso + ' ' : '') + 'La respuesta no parece estar en ' + lengua +
     ': revísala o pide otra versión.';
+  return avisarSiCortada_(salida);
+}
+
+/** true si la respuesta acaba a media frase (sin punto, exclamación, emoji…). */
+function pareceCortada_(texto) {
+  return /[\p{L}\p{N},;:\-–]$/u.test(String(texto || '').trim());
+}
+
+/** Una respuesta cortada lleva aviso: así no se publica sola y el equipo la ve. */
+function avisarSiCortada_(salida) {
+  if (pareceCortada_(salida.respuesta)) {
+    salida.aviso = (salida.aviso ? salida.aviso + ' ' : '') + 'La respuesta parece cortada a media frase: ' +
+      'revísala o pide otra versión.';
+  }
   return salida;
 }
 
@@ -1465,7 +1479,7 @@ function configurarPublicacion() {
 /** ¿Se puede publicar sola? Positiva de Google, con respuesta en su idioma y sin avisos. */
 function publicableSola_(f, ahora) {
   if (f[COL.PLATAFORMA - 1] !== 'Google' || f[COL.ESTADO - 1] !== ESTADO.PENDIENTE) return false;
-  if (!f[COL.RESPUESTA - 1] || f[COL.AVISO - 1]) return false;
+  if (!f[COL.RESPUESTA - 1] || f[COL.AVISO - 1] || pareceCortada_(f[COL.RESPUESTA - 1])) return false;
   if (Number(f[COL.ESTRELLAS - 1]) < CONFIG.MIN_ESTRELLAS_AUTO) return false;
   if (fecha_(f[COL.FECHA - 1]).getTime() > ahora - CONFIG.HORAS_DESDE_RESENA * HORA) return false;
   return !idiomaDistinto_(f[COL.IDIOMA - 1], f[COL.RESPUESTA - 1]);
@@ -1515,6 +1529,9 @@ function publicarFila_(id, texto) {
   if (f[COL.PLATAFORMA - 1] !== 'Google') throw new Error('Solo se puede publicar automáticamente en Google.');
   const respuesta = String(texto || f[COL.RESPUESTA - 1] || '').trim();
   if (!respuesta) throw new Error('No hay respuesta que publicar.');
+  if (pareceCortada_(respuesta)) {
+    throw new Error('la respuesta parece cortada (acaba en "…' + respuesta.slice(-30) + '"). Termínala antes de publicar.');
+  }
   const rest = buscarRestaurantePorNombre_(leerRestaurantes_(), f[COL.RESTAURANTE - 1]);
   if (rest && !rest.activo) throw new Error('Ese local está desactivado en la pestaña Restaurantes: no se publica.');
   const cid = (rest && rest.cid) || '';
