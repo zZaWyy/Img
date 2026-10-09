@@ -242,10 +242,12 @@ Google** para publicarlas al momento. Horario y condiciones: `PUBLICAR_*`,
 6. **＋** → **Google Business Profile → Create/Update a Review Reply** →
    *Enter manually* → *Review name*: **name** (del Iterator) → *Reply
    comment*: **respuesta** (del webhook).
-7. Filtro en la línea entre el Iterator y la respuesta: **reviewer →
-   displayName** *Equal to* **cliente** (del webhook) **Y** **reviewReply**
-   *Does not exist*. Así responde solo a esa reseña y nunca pisa una
-   respuesta que ya exista.
+7. Filtro en la línea entre el Iterator y la respuesta (las tres a la vez):
+   `{{length(1.reviewId)}}` *Greater than* `10`; **reviewReplyUrl** (del
+   Iterator) *Contains* `/reviews/` + **reviewId** (del webhook); y
+   **reviewReply** *Does not exist*. Así responde solo a esa reseña (por su
+   código, no por el nombre del cliente) y nunca pisa una respuesta que ya
+   exista.
 8. **＋** → **Webhooks → Webhook response** → *Status* `200`, *Body*
    `{"ok":true}`.
 9. Guarda 💾, activa el escenario (**ON**) con **Immediately as data
@@ -253,9 +255,13 @@ Google** para publicarlas al momento. Horario y condiciones: `PUBLICAR_*`,
 10. Prueba: en la cola, en una reseña de Google, pulsa **Publicar en
     Google** y comprueba en Google que aparece la respuesta.
 
-Si Make no la publica (ya tenía respuesta, no la encontró o el escenario
-está apagado), la reseña se queda en la cola marcada en naranja para
-hacerla a mano y llega un correo. No se reintenta sola, así no gasta
+Si la reseña no está entre las 50 últimas del local (pasa con las de hace
+unas semanas en los locales con muchas reseñas), la hoja la busca más atrás
+con el escenario de *Reseñas antiguas* (hasta 500 reseñas, unos 4 créditos
+por cada 50) y la publica con él; si ya tenía respuesta en Google, la pasa a
+Publicadas con esa respuesta. Si aun así no se publica (no la encontró o el
+escenario está apagado), la reseña se queda en la cola marcada en naranja
+para hacerla a mano y llega un correo. No se reintenta sola, así no gasta
 operaciones. Para desactivarlo: **Reseñas → 🤖 Publicación automática en Google**.
 
 ## Reseñas antiguas de Google sin responder (opcional)

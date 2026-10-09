@@ -372,13 +372,14 @@
     aviso('Publicando en Google…');
     llamar('colaAccion', [r.id, 'publicarYa', { texto: texto }], res => {
       r.estado = (res && res.estado) || 'Enviada a Google ⏳';
+      if (res && res.publicada) r.publicada = res.publicada;
       pintar();
-      aviso(r.estado === 'Publicada ✔' ? 'Publicada en Google ✔' : 'Enviada a Google ✔');
+      aviso((res && res.mensaje) || (r.estado === 'Publicada ✔' ? 'Publicada en Google ✔' : 'Enviada a Google ✔'));
     }, e => {
       r.estado = antes.estado; r.publicada = antes.publicada;
       pintar();
       aviso('No se publicó: ' + e.message);
-    });
+    }, true); // sin tope: si hay que buscarla entre las antiguas tarda más
   }
 
   let rehaciendo = false;

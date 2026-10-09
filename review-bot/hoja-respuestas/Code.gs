@@ -79,6 +79,7 @@ const CONFIG = {
   // Van despacio para no gastar los créditos de Make de golpe; las nuevas siempre van antes.
   HIST_PAGINAS_POR_DIA: 6,               // cada página son 50 reseñas leídas (unos 4 créditos)
   HIST_RESPUESTAS_POR_DIA: 8,            // respuestas a antiguas al día (unos 3 créditos cada una)
+  BUSQUEDA_MAX_PAGINAS: 10,              // si una reseña no está entre las 50 últimas, se busca hasta 500 atrás
 
   // --- Créditos de Make ---
   // Las antiguas solo usan lo que sobra después de reservar lo que necesitarán las nuevas hasta
@@ -1573,7 +1574,36 @@ function publicarFila_(id, texto) {
   // Si Make contesta solo "Accepted", no llegó: no encontró la reseña, ya tenía respuesta,
   // el escenario está apagado o se procesó en modo "Run once".
   if (!cuerpo.trim() || cuerpo.trim() === 'Accepted') {
-    // Make no la publicó: no encontró la reseña en Google, ya tenía respuesta o el escenario está apagado.
+    // El escenario de las nuevas solo mira las 50 reseñas más recientes del local. Si no estaba
+    // ahí (o ya tenía respuesta), se busca más atrás con el escenario "Reseñas antiguas".
+    const ubicacion = NEGOCIO_GOOGLE[cid];
+    const rv = !historica && urlHist && ubicacion
+      ? buscarEnGoogle_(urlHist, ubicacion, String(id).replace(/^g:/, ''), fecha_(f[COL.FECHA - 1])) : null;
+    if (rv && rv.reviewReply) {
+      return marcarPublicada_(hoja, id, String(rv.reviewReply.comment || ''), 'Ya tenía respuesta en Google ' +
+        '(comprobado el ' + Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm') + ')');
+    }
+    if (rv) {
+      const r2 = UrlFetchApp.fetch(urlHist, {
+        method: 'post',
+        contentType: 'application/json',
+        muteHttpExceptions: true,
+        payload: JSON.stringify({ accion: 'responder', nombreApi: rv.name, respuesta: respuesta }),
+      });
+      const c2 = r2.getResponseCode();
+      const b2 = r2.getContentText().trim();
+      const ok2 = c2 < 300 && b2 && b2 !== 'Accepted';
+      apuntarCreditosMake_(ok2 || c2 === 422 ? CREDITOS.RESPUESTA_ANTIGUA : 1, ok2);
+      if (ok2) {
+        return marcarPublicada_(hoja, id, respuesta, 'Publicada automáticamente el ' +
+          Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm'));
+      }
+      if (c2 === 422) {
+        marcarParaMano_(hoja, id, 'Google no aceptó la respuesta (¿se borró la reseña?). Revísala y publícala a mano.');
+        throw new Error('Google no aceptó la respuesta: ' + b2.slice(0, 200));
+      }
+    }
+    // Make no la publicó: no encontró la reseña en Google o el escenario está apagado.
     // Se marca para hacerla a mano y así no se reintenta (ni gasta operaciones) en cada vuelta.
     marcarParaMano_(hoja, id, 'No se pudo publicar sola en Google (¿ya tenía respuesta o no se ' +
       'encontró?). Revísala y publícala a mano.');
@@ -1581,21 +1611,56 @@ function publicarFila_(id, texto) {
       'la reseña ya tuviera respuesta o no se encontrara. Queda marcada para hacerla a mano. Si pasa con todas, ' +
       'revisa que el escenario de Make esté activado.');
   }
-  const estado = ESTADO.PUBLICADA;
   if (historica) {
     const c = contadorHistorico_();
     c.respuestas++;
     guardarContadorHistorico_(c);
   }
+  return marcarPublicada_(hoja, id, respuesta, 'Publicada automáticamente el ' +
+    Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm'));
+}
+
+function marcarPublicada_(hoja, id, texto, nota) {
   conBloqueo_(() => {
     const m = filaPorId_(hoja, id);
     if (!m) return;
-    hoja.getRange(m, COL.ESTADO).setValue(estado);
-    hoja.getRange(m, COL.PUBLICADA).setValue(respuesta);
-    hoja.getRange(m, COL.ESTADO).setNote('Publicada automáticamente el ' +
-      Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm'));
+    hoja.getRange(m, COL.ESTADO).setValue(ESTADO.PUBLICADA);
+    hoja.getRange(m, COL.PUBLICADA).setValue(texto);
+    hoja.getRange(m, COL.ESTADO).setNote(nota);
+    const aviso = hoja.getRange(m, COL.AVISO);
+    if (/^(No se pudo publicar sola|Google no aceptó)/.test(String(aviso.getValue()))) aviso.setValue('');
   });
-  return estado;
+  return ESTADO.PUBLICADA;
+}
+
+/**
+ * Busca una reseña en Google por su código de Maps (el ID de la hoja, que aparece en
+ * "reviewReplyUrl") con el escenario "Reseñas antiguas": de la más reciente hacia atrás
+ * hasta pasar su fecha. Devuelve la reseña de la API ("name" y, si la tiene,
+ * "reviewReply") o null.
+ */
+function buscarEnGoogle_(urlHist, ubicacion, idMaps, fecha) {
+  const limite = fecha.getTime() - DIA;
+  let token = '';
+  for (let pagina = 0; pagina < CONFIG.BUSQUEDA_MAX_PAGINAS; pagina++) {
+    const res = UrlFetchApp.fetch(urlHist, {
+      method: 'post',
+      contentType: 'application/json',
+      muteHttpExceptions: true,
+      payload: JSON.stringify({ accion: 'listar', ubicacion: ubicacion, pageToken: token }),
+    });
+    apuntarCreditosMake_(CREDITOS.PAGINA, false);
+    let datos = null;
+    try { datos = JSON.parse(res.getContentText()); } catch (e) { /* no es JSON */ }
+    if (res.getResponseCode() >= 300 || !datos || !Array.isArray(datos.reviews)) return null;
+    const rv = datos.reviews.find(x => String(x.reviewReplyUrl || '').split('?')[0].endsWith('/reviews/' + idMaps));
+    if (rv) return rv;
+    // Vienen ordenadas por fecha de última modificación: pasada su fecha, ya no aparecerá.
+    const ultima = datos.reviews[datos.reviews.length - 1];
+    if (!datos.nextPageToken || !ultima || fecha_(ultima.updateTime || ultima.createTime).getTime() < limite) return null;
+    token = datos.nextPageToken;
+  }
+  return null;
 }
 
 
@@ -1920,7 +1985,11 @@ function colaAccion(id, accion, datos) {
   if (accion === 'publicarYa') {
     const estado = publicarFila_(id, datos.texto);
     conBloqueo_(actualizarHojaPublicadas_);
-    return { estado: estado };
+    const hoja = hoja_(HOJA.RESPUESTAS);
+    const m = filaPorId_(hoja, id);
+    const ya = m && /^Ya tenía respuesta/.test(hoja.getRange(m, COL.ESTADO).getNote());
+    return { estado: estado, publicada: m ? String(hoja.getRange(m, COL.PUBLICADA).getValue()) : '',
+      mensaje: ya ? 'Ya tenía respuesta en Google: queda en Publicadas con esa respuesta.' : '' };
   }
   if (accion === 'redactarPendientes') { generarPendientes_(Date.now()); return { ok: true }; }
   if (accion === 'regenerar') {
