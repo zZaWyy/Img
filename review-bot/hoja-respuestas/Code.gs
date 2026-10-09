@@ -84,7 +84,7 @@ const CONFIG = {
   // Las antiguas solo usan lo que sobra después de reservar lo que necesitarán las nuevas hasta
   // que Make renueve los créditos. Si contratáis un plan de pago, cambiad MAKE_CREDITOS_MES.
   MAKE_CREDITOS_MES: 1000,
-  MAKE_DIA_RENOVACION: 8,                // día del mes en que Make renueva los créditos (el del alta)
+  MAKE_DIA_RENOVACION: 7,                // día del mes en que Make renueva los créditos (el del alta)
   MAKE_NUEVAS_POR_DIA: 7,                // previsión mínima de publicaciones nuevas al día
   MAKE_CREDITOS_POR_NUEVA: 5,
 };
@@ -566,7 +566,7 @@ function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
   const version = props.getProperty('VERSION');
-  if (version === '3.6') return;
+  if (version === '3.7') return;
   const antesDe = v => !version || Number(version) < v;
   if (antesDe(3)) pedirRecuperacion_();   // rescata las reseñas sin responder del último mes
   if (antesDe(3.1)) {
@@ -583,7 +583,8 @@ function migrarVersion_() {
     desactivarLocales_(LOCALES_TRASPASADOS);   // ya no los gestiona el grupo
     rehacerBorradoresNegativas_();             // negativas con el tono nuevo (breve y neutro)
   }
-  props.setProperty('VERSION', '3.6');
+  if (antesDe(3.7)) estimarUsoMakeAnterior_();  // antes no se contaban los créditos de Make
+  props.setProperty('VERSION', '3.7');
 }
 
 /** Locales traspasados a otra sociedad (octubre 2026): fuera del sistema. */
@@ -1543,8 +1544,13 @@ function publicarFila_(id, texto) {
   const codigo = res.getResponseCode();
   const cuerpo = res.getContentText();
   const confirmada = codigo < 300 && cuerpo.trim() && cuerpo.trim() !== 'Accepted';
-  apuntarCreditosMake_(historica ? (confirmada ? CREDITOS.RESPUESTA_ANTIGUA : 1)
+  apuntarCreditosMake_(historica ? (confirmada || codigo === 422 ? CREDITOS.RESPUESTA_ANTIGUA : 1)
     : (confirmada ? CONFIG.MAKE_CREDITOS_POR_NUEVA : CREDITOS.NUEVA_SIN_PUBLICAR), confirmada && !historica);
+  if (codigo === 422) {
+    // El escenario llegó a Google y Google la rechazó (reseña borrada, por ejemplo): no se reintenta.
+    marcarParaMano_(hoja, id, 'Google no aceptó la respuesta (¿se borró la reseña?). Revísala y publícala a mano.');
+    throw new Error('Google no aceptó la respuesta: ' + cuerpo.slice(0, 200));
+  }
   if (codigo >= 300) throw new Error('Make respondió ' + codigo + ': ' + cuerpo.slice(0, 200));
   // Solo cuenta como publicada si llega al último módulo de Make ("Webhook response").
   // Si Make contesta solo "Accepted", no llegó: no encontró la reseña, ya tenía respuesta,
@@ -1552,11 +1558,8 @@ function publicarFila_(id, texto) {
   if (!cuerpo.trim() || cuerpo.trim() === 'Accepted') {
     // Make no la publicó: no encontró la reseña en Google, ya tenía respuesta o el escenario está apagado.
     // Se marca para hacerla a mano y así no se reintenta (ni gasta operaciones) en cada vuelta.
-    conBloqueo_(() => {
-      const m = filaPorId_(hoja, id);
-      if (m) hoja.getRange(m, COL.AVISO).setValue('No se pudo publicar sola en Google (¿ya tenía respuesta o no se ' +
-        'encontró?). Revísala y publícala a mano.');
-    });
+    marcarParaMano_(hoja, id, 'No se pudo publicar sola en Google (¿ya tenía respuesta o no se ' +
+      'encontró?). Revísala y publícala a mano.');
     throw new Error('Make la recibió pero no la publicó (respondió "' + cuerpo.trim().slice(0, 60) + '"): puede que ' +
       'la reseña ya tuviera respuesta o no se encontrara. Queda marcada para hacerla a mano. Si pasa con todas, ' +
       'revisa que el escenario de Make esté activado.');
@@ -1576,6 +1579,15 @@ function publicarFila_(id, texto) {
       Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm'));
   });
   return estado;
+}
+
+
+/** Deja un aviso en la fila: ya no se publica sola (ni se reintenta) hasta que alguien la revise. */
+function marcarParaMano_(hoja, id, aviso) {
+  conBloqueo_(() => {
+    const m = filaPorId_(hoja, id);
+    if (m) hoja.getRange(m, COL.AVISO).setValue(aviso);
+  });
 }
 
 
@@ -1636,6 +1648,33 @@ function apuntarCreditosMake_(creditos, nueva) {
 }
 
 /**
+ * Al actualizar desde una versión que no contaba los créditos: estima lo que ya
+ * se gastó en este ciclo con las publicadas por Make (nota "Publicada
+ * automáticamente el …") y las que Make no llegó a publicar.
+ */
+function estimarUsoMakeAnterior_() {
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  if (hoja.getLastRow() < 2) return;
+  const n = hoja.getLastRow() - 1;
+  const filas = hoja.getRange(2, 1, n, CABECERA.length).getValues();
+  const notas = hoja.getRange(2, COL.ESTADO, n, 1).getNotes();
+  const u = usoMake_();
+  let creditos = 0, nuevas = 0;
+  filas.forEach((f, i) => {
+    const m = /Publicada automáticamente el (\d\d)\/(\d\d)\/(\d{4})/.exec(notas[i][0] || '');
+    if (m && new Date(+m[3], +m[2] - 1, +m[1], 23, 59).getTime() >= u.inicio) {
+      creditos += esHistorica_(f[COL.ID - 1]) ? CREDITOS.RESPUESTA_ANTIGUA : CONFIG.MAKE_CREDITOS_POR_NUEVA;
+      if (!esHistorica_(f[COL.ID - 1])) nuevas++;
+    } else if (/^No se pudo publicar sola/.test(String(f[COL.AVISO - 1] || ''))) {
+      creditos += CREDITOS.NUEVA_SIN_PUBLICAR;
+    }
+  });
+  if (creditos <= u.creditos) return;
+  PropertiesService.getScriptProperties().setProperty('MAKE_USO',
+    JSON.stringify({ ciclo: u.ciclo, creditos: creditos, nuevas: Math.max(nuevas, u.nuevas) }));
+}
+
+/**
  * Lo que sobra para las antiguas: créditos del mes, menos lo gastado, menos lo
  * que necesitarán las nuevas hasta la renovación (con un 20 % de margen).
  */
@@ -1657,7 +1696,7 @@ function configurarHistorico() {
     const lineas = leerRestaurantes_().filter(r => r.activo && NEGOCIO_GOOGLE[r.cid]).map(r => {
       const e = estado[r.cid] || {};
       return '• ' + r.nombre + ': ' + (e.paginas || 0) * 50 + ' reseñas revisadas, ' + (e.anadidas || 0) +
-        ' por responder' + (e.fin ? ' (terminado)' : '');
+        ' por responder' + (e.fin ? (e.errores >= 3 ? ' (Google no deja leerlo: se salta)' : ' (terminado)') : '');
     });
     const hoja = hoja_(HOJA.RESPUESTAS);
     const respondidas = hoja.getLastRow() < 2 ? 0 : hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues()
@@ -1711,8 +1750,9 @@ function leerHistorico_() {
   const estado = JSON.parse(props.getProperty('HIST_ESTADO') || '{}');
   const pendientes = leerRestaurantes_().filter(r => r.activo && NEGOCIO_GOOGLE[r.cid] && !(estado[r.cid] || {}).fin);
   if (!pendientes.length) return;
-  // Todos los locales avanzan a la par.
-  pendientes.sort((a, b) => ((estado[a.cid] || {}).paginas || 0) - ((estado[b.cid] || {}).paginas || 0));
+  // Todos los locales avanzan a la par (los que dan error no se quedan siempre los primeros).
+  const turno = r => ((estado[r.cid] || {}).paginas || 0) + ((estado[r.cid] || {}).errores || 0);
+  pendientes.sort((a, b) => turno(a) - turno(b));
   const rest = pendientes[0];
   const e = estado[rest.cid] || { token: '', paginas: 0, anadidas: 0, fin: false };
   const res = UrlFetchApp.fetch(url, {
@@ -1726,9 +1766,20 @@ function leerHistorico_() {
   let datos = null;
   try { datos = JSON.parse(cuerpo); } catch (err) { /* no es JSON */ }
   if (res.getResponseCode() >= 300 || !datos || typeof datos !== 'object') {
+    hoy.paginas++; // el intento cuenta para el tope diario
+    guardarContadorHistorico_(hoy);
+    if (res.getResponseCode() === 422) {
+      // Google no deja leer las reseñas de este local: tras 3 intentos se salta.
+      e.errores = (e.errores || 0) + 1;
+      if (e.errores >= 3) e.fin = true;
+      estado[rest.cid] = e;
+      props.setProperty('HIST_ESTADO', JSON.stringify(estado));
+      throw new Error('Google no dejó leer las reseñas antiguas de ' + rest.nombre + (e.fin ? ' (se salta este local).' : '.'));
+    }
     throw new Error('el escenario de Make "Reseñas antiguas" respondió ' + res.getResponseCode() + ': "' +
       cuerpo.trim().slice(0, 80) + '". Revisa que esté activado y termine con "Webhook response".');
   }
+  e.errores = 0;
   const filas = filasHistoricas_(datos.reviews || [], rest);
   if (filas.length) conBloqueo_(() => anadirFilas_(hoja_(HOJA.RESPUESTAS), filas));
   e.paginas = (e.paginas || 0) + 1;

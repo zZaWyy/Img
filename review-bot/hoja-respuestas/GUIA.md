@@ -272,27 +272,31 @@ la renovación (según el ritmo real, con un 20 % de margen). Las antiguas
 solo usan lo que sobra: con el plan gratis avanzan sobre todo al final de
 cada ciclo; con un plan de pago (cambiad `MAKE_CREDITOS_MES`) van a diario.
 `MAKE_DIA_RENOVACION` es el día del mes en que Make renueva los créditos
-(en Make → *Org* se ve la fecha).
+(el 7; en Make → *Org* se ve la fecha).
 
-**Montarlo en Make** (nuevo escenario):
+**En Make ya está montado** (escenario *Reseñas antiguas*, activado). Solo
+hay que pegar su dirección en la hoja: **Reseñas → 📜 Reseñas antiguas de
+Google**. La dirección se ve en Make → *Webhooks* → *Reseñas antiguas*
+(no la pongáis en sitios públicos: con ella se puede responder en Google).
 
-1. **Webhooks → Custom webhook** → *Add* → `Reseñas antiguas` → copia la
-   dirección → **Run once**.
-2. En la hoja: **Reseñas → 📜 Reseñas antiguas de Google** → pega la
-   dirección (la hoja manda una muestra para que Make aprenda los campos).
-3. **＋** → **Flow Control → Router**.
-4. **Ruta 1** (filtro *accion* = `listar`): **Google Business Profile →
-   Make an API Call** → *Legacy Google My Business API*, `GET`, URL
-   `/v4/accounts/108401907022019746383/locations/{{1.ubicacion}}/reviews`,
-   *Query String* `pageSize` = `50` y `pageToken` = **pageToken** (del
-   webhook) → **JSON → Transform to JSON** con *Object* = **Body** del
-   módulo anterior → **Webhooks → Webhook response**, *Status* `200`,
-   *Body* = **JSON string** del módulo anterior.
-5. **Ruta 2** (filtro *accion* = `responder`): **Google Business Profile →
-   Create/Update a Review Reply** → *Enter manually*, *Review name* =
-   **nombreApi**, *Reply comment* = **respuesta** → **Webhooks → Webhook
-   response**, *Status* `200`, *Body* `{"ok":true}`.
-6. Guarda, actívalo (**ON**, *Immediately*).
+Si hubiera que rehacerlo, el escenario es:
+
+- **Webhooks → Custom webhook** `Reseñas antiguas` → **Flow Control → Router**.
+- **Ruta 1** (filtro *accion* = `listar`): **Google Business Profile →
+  Make an API Call** → *Legacy Google My Business API*, `GET`, URL
+  `/v4/accounts/108401907022019746383/locations/{{1.ubicacion}}/reviews`,
+  *Query String* `pageSize` = `50` y `pageToken` = **pageToken** →
+  **JSON → Transform to JSON** (*Object* = **Body**) → **Webhooks → Webhook
+  response**, *Status* `200`, *Body* = **JSON string**.
+- **Ruta 2** (filtro *accion* = `responder`): **Google Business Profile →
+  Create/Update a Review Reply** → *Enter manually*, *Review name* =
+  **nombreApi**, *Reply comment* = **respuesta** → **Webhook response**,
+  *Status* `200`, *Body* `{"ok":true}`.
+- En los dos módulos de Google, **clic derecho → Add error handler →
+  Webhook response** (*Status* `422`) **→ Skip**. Así, si Google rechaza
+  algo (una reseña borrada), la hoja lo marca para hacerlo a mano y no lo
+  reintenta, y Make no apaga el escenario por errores seguidos.
+- Activado (**ON**, *Immediately*).
 
 El avance se ve en **Reseñas → 📜 Reseñas antiguas de Google**.
 
