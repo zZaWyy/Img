@@ -34,6 +34,9 @@ const CONFIG = {
   DIAS_MAXIMOS: 31,                      // reseñas más antiguas no se apuntan
   // "Recuperar reseñas sin responder": hasta cuántos días atrás mira.
   DIAS_RECUPERACION: 30,
+  // Cada semana se repasa el último mes de Google: así salen de la cola las que
+  // alguien respondió directamente en Google pasados los días del repaso diario.
+  DIAS_ENTRE_REPASOS_DEL_MES: 7,
   // Gasto mensual de Apify (de 5 $ gratis) a partir del cual solo se hace
   // el repaso diario.
   APIFY_PRESUPUESTO_USD: 4.5,
@@ -789,11 +792,14 @@ function lanzarLecturaSiToca_(clave) {
   if (props.getProperty('ESTILO_PEDIDO_' + clave)) tipo = 'estilo';
   else if (props.getProperty('RECUPERAR_PEDIDO_' + clave)) tipo = 'recuperar';
   else if (f.repasoDiario && desdeUltima('repaso') >= 20 * HORA) tipo = 'repaso';
+  else if (f.repasoDiario && desdeUltima('recuperar') >= CONFIG.DIAS_ENTRE_REPASOS_DEL_MES * DIA) tipo = 'mensual';
   else if (desdeUltima('nuevas') >= f.horas() * HORA - 5 * MIN) tipo = 'nuevas';
   if (!tipo) return;
 
   const gasto = gastoApify_();
   if (gasto !== null && gasto >= 5) return; // tope gratuito: Apify rechazaría la lectura
+  if (tipo === 'mensual' && gasto !== null && gasto >= CONFIG.APIFY_PRESUPUESTO_USD) return;
+  if (tipo === 'mensual') tipo = 'recuperar';
   if (tipo === 'nuevas' && gasto !== null && gasto >= CONFIG.APIFY_PRESUPUESTO_USD) {
     avisarError_('presupuesto', 'El gasto de Apify de este mes (' + gasto.toFixed(2) +
       ' $) se acerca a los 5 $ gratuitos: hasta fin de mes solo se hará el repaso diario.');

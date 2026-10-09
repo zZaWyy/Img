@@ -7,7 +7,9 @@ estilo de la casa. Publicas desde el móvil con dos toques.
 ## Qué hace
 
 - **Lee las reseñas nuevas** de Google Maps cada hora y las de TripAdvisor
-  cada 12 h. Un repaso diario recoge las que Google publica con retraso.
+  cada 12 h. Un repaso diario recoge las que Google publica con retraso y,
+  una vez por semana, repasa el último mes: las que alguien respondió
+  directamente en Google salen solas de la cola.
 - **Redacta un borrador** para las de 4-5★, en el idioma del cliente, y
   **traduce** al español las reseñas en otros idiomas. Comprueba el idioma
   de cada borrador: si sale en otro, lo repite, y si aun así falla, lo
@@ -394,6 +396,9 @@ Al principio de `Code.gs`, bloque `CONFIG`. Tras cambiar algo, guarda 💾:
 - `HORAS_ENTRE_LECTURAS` (1) y `HORAS_ENTRE_LECTURAS_TRIPADVISOR` (12).
 - `DIAS_MAXIMOS` (31): antigüedad máxima de las reseñas que se apuntan.
 - `DIAS_RECUPERACION` (30): hasta dónde mira **📥 Recuperar reseñas**.
+- `DIAS_ENTRE_REPASOS_DEL_MES` (7): cada cuántos días se repasa el último
+  mes de Google, para quitar de la cola las que alguien respondió
+  directamente en Google.
 - `MODELOS`: orden de modelos de IA.
 - `EMAIL_AVISOS`: a quién llegan los correos. Vacío = la cuenta dueña de la
   hoja; varios, separados por comas.
