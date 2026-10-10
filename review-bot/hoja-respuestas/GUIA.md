@@ -319,6 +319,10 @@ plan gratis): publicar las nuevas (unos 5 por reseña), las antiguas y
 cualquier otro uso, como consultar fichas o publicar posts. La hoja reserva
 los que necesitarán las reseñas nuevas hasta la renovación.
 
+La pestaña **Créditos Make** muestra siempre los gastados, los que quedan,
+cuándo se renuevan, si llegan para las nuevas y cuántos sobran para las
+antiguas. Se actualiza sola cada media hora.
+
 Para que vea los créditos **reales** (y no solo lo que gasta ella):
 **Reseñas → 📊 Créditos de Make** → pega un token de la API de Make (Make →
 tu foto, abajo a la izquierda → *Profile* → *API access* → *Add token* →

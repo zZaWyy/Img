@@ -104,6 +104,7 @@ const HOJA = {
   EJEMPLOS: 'Ejemplos',
   PROMPT: 'Prompt',
   PUBLICADAS: 'Publicadas',
+  CREDITOS: 'Créditos Make',
 };
 
 const CABECERA = ['Fecha', 'Plataforma', 'Restaurante', 'Cliente', '★', 'Idioma',
@@ -749,6 +750,7 @@ function ciclo() {
   try { publicarAutomaticas_(); } catch (e) { avisarError_('publicar', 'Fallo en la publicación automática: ' + (e.message || e)); }
   try { leerHistorico_(); } catch (e) { avisarError_('historico', 'Fallo leyendo reseñas antiguas: ' + (e.message || e)); }
   try { vigilarCreditosMake_(); } catch (e) { console.warn('Créditos de Make: ' + e); }
+  try { actualizarHojaCreditos_(); } catch (e) { console.warn('Pestaña de créditos: ' + e); }
   enviarResumenSiToca_();
   try { conBloqueo_(actualizarHojaPublicadas_); } catch (e) { console.warn('publicadas: ' + e); }
 }
@@ -1766,9 +1768,21 @@ function leerOrganizacionMake_(token) {
     if (res.getResponseCode() !== 200) throw new Error('Make respondió ' + res.getResponseCode());
     return JSON.parse(res.getContentText());
   };
-  const orgs = api('organizations').organizations || [];
-  if (!orgs.length) throw new Error('el token no ve ninguna organización');
-  const o = api('organizations/' + orgs[0].id).organization || {};
+  const props = PropertiesService.getScriptProperties();
+  let id = props.getProperty('MAKE_ORG_ID');
+  if (!id) {
+    const orgs = api('organizations').organizations || [];
+    if (!orgs.length) throw new Error('el token no ve ninguna organización');
+    id = String(orgs[0].id);
+    props.setProperty('MAKE_ORG_ID', id);
+  }
+  let o;
+  try {
+    o = api('organizations/' + id).organization || {};
+  } catch (e) {
+    props.deleteProperty('MAKE_ORG_ID'); // por si cambió la organización
+    throw e;
+  }
   const usados = o.centicreditsConsumed !== undefined ? Number(o.centicreditsConsumed) / 100 : Number(o.operations);
   const mes = Number((o.license || {}).operations) || CONFIG.MAKE_CREDITOS_MES;
   const inicio = Date.parse(o.lastReset);
@@ -1833,18 +1847,58 @@ function creditosSobrantes_() {
  */
 function vigilarCreditosMake_() {
   if (!publicacionActiva_()) return;
-  const u = usoMake_();
-  if (!u.real) return;
-  const ahora = Date.now();
-  const quedan = Math.max(0, (u.fin - ahora) / DIA);
-  const ritmo = Math.max(CONFIG.MAKE_NUEVAS_POR_DIA, u.nuevas / Math.max(1, (ahora - u.inicio) / DIA));
-  const necesarios = Math.round(ritmo * CONFIG.MAKE_CREDITOS_POR_NUEVA * quedan);
-  const restantes = u.mes - u.creditos;
-  if (restantes >= necesarios) return;
+  const { u, necesarios, restantes } = previsionMake_();
+  if (!u.real || restantes >= necesarios) return;
   avisarError_('creditos-make', 'Make: quedan ' + Math.max(0, restantes) + ' créditos de ' + u.mes + ' hasta el ' +
     Utilities.formatDate(new Date(u.fin), ZONA, 'dd/MM') + ', y publicar las reseñas nuevas hasta entonces ' +
     'necesitará unos ' + necesarios + '. Si se acaban, las respuestas no se publicarán solas (habrá que hacerlas ' +
     'a mano desde la cola). Todo lo que se hace con Make gasta de los mismos créditos (también las fichas y los posts).');
+}
+
+/** Créditos que quedan y los que necesitarán las reseñas nuevas hasta la renovación. */
+function previsionMake_() {
+  const u = usoMake_();
+  const ahora = Date.now();
+  const quedan = Math.max(0, (u.fin - ahora) / DIA);
+  const ritmo = Math.max(CONFIG.MAKE_NUEVAS_POR_DIA, u.nuevas / Math.max(1, (ahora - u.inicio) / DIA));
+  return { u: u, dias: quedan, necesarios: Math.round(ritmo * CONFIG.MAKE_CREDITOS_POR_NUEVA * quedan),
+    restantes: u.mes - u.creditos };
+}
+
+/** Pestaña "Créditos Make": la reescribe el programa en cada vuelta (cada media hora). */
+function actualizarHojaCreditos_() {
+  const props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('MAKE_WEBHOOK') && !props.getProperty('MAKE_API_TOKEN')) return;
+  const { u, dias, necesarios, restantes } = previsionMake_();
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  let hoja = libro.getSheetByName(HOJA.CREDITOS);
+  if (!hoja) {
+    hoja = libro.insertSheet(HOJA.CREDITOS);
+    hoja.setColumnWidth(1, 330);
+    hoja.setColumnWidth(2, 420);
+    hoja.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#1a7f37').setFontColor('#ffffff');
+    hoja.getRange(2, 1, 9, 1).setFontWeight('bold');
+  }
+  const fecha = t => Utilities.formatDate(new Date(t), ZONA, 'dd/MM/yyyy');
+  const llegan = Math.max(0, restantes) >= necesarios;
+  const filas = [
+    ['Créditos de Make', u.real ? 'Datos reales de Make' : 'Estimación de la hoja (para ver los reales: Reseñas → 📊 Créditos de Make)'],
+    ['Gastados', u.creditos + ' de ' + u.mes + ' (' + Math.round(100 * u.creditos / u.mes) + ' %)'],
+    ['Quedan', Math.max(0, restantes)],
+    ['Se renuevan el', fecha(u.fin)],
+    ['Días hasta la renovación', Math.ceil(dias)],
+    ['Previsión para publicar las reseñas nuevas hasta entonces', necesarios],
+    ['¿Llegan?', llegan ? 'Sí' : 'No: faltan unos ' + (necesarios - Math.max(0, restantes)) +
+      '. Si se acaban, las respuestas no se publican solas (habrá que hacerlas a mano desde la cola).'],
+    ['Sobran para las reseñas antiguas', Math.max(0, creditosSobrantes_())],
+    ['Actualizado', Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm')],
+    ['', ''],
+    ['Todo lo que se hace con Make gasta de estos créditos: publicar reseñas (unos 5 por reseña), las antiguas ' +
+      'y otros usos como consultar fichas o publicar posts. Se actualiza sola cada media hora.', ''],
+  ];
+  hoja.getRange(1, 1, Math.max(hoja.getLastRow(), filas.length), 2).clearContent();
+  hoja.getRange(1, 1, filas.length, 2).setValues(filas);
+  hoja.getRange(7, 2).setFontColor(llegan ? '#1a7f37' : '#c62828');
 }
 
 /** Menú: créditos de Make (reales con un token de la API de Make, o estimados). */
@@ -1862,6 +1916,7 @@ function verCreditosMake() {
         leerOrganizacionMake_(token);
         props.setProperty('MAKE_API_TOKEN', token);
         CacheService.getScriptCache().remove('MAKE_REAL');
+        actualizarHojaCreditos_();
       } catch (e) {
         ui.alert('Ese token no funciona (' + (e.message || e) + '). Revisa que tenga el permiso "organizations:read".');
         return;
@@ -1875,11 +1930,13 @@ function verCreditosMake() {
     Utilities.formatDate(new Date(u.fin), ZONA, 'dd/MM') + '.\n' +
     (sobran > 0 ? 'Después de reservar los de las reseñas nuevas, sobran unos ' + sobran + ' (para las antiguas).'
       : 'No sobran: se reservan para publicar las reseñas nuevas; las antiguas esperan.') +
+    '\n\nLo tienes siempre a la vista en la pestaña "' + HOJA.CREDITOS + '".' +
     (u.real ? '\n\n¿Quitar el token de Make?' : ''), u.real ? ui.ButtonSet.YES_NO : ui.ButtonSet.OK);
   if (u.real && r === ui.Button.YES) {
     props.deleteProperty('MAKE_API_TOKEN');
     CacheService.getScriptCache().remove('MAKE_REAL');
   }
+  actualizarHojaCreditos_();
 }
 
 function configurarHistorico() {
