@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_blank">
+<meta charset="utf-8">
+<title>Respuestas · Unicum</title>
+<style>
+  :root {
+    --bg: #f4f1ec; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e4dfd6;
+    --accent: #1f3a5f; --accent-text: #ffffff; --ok: #1e7b4c; --ok-text: #ffffff; --warn-bg: #fff4dc; --warn: #8a5a00;
+    --bad: #a3242f; --chip: #ebe6dd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --card: #1f1f22; --text: #f1f1f3; --muted: #a1a1a8; --line: #2e2e33;
+      --accent: #8fb3e0; --accent-text: #0e1a2b; --ok: #5ccf94; --ok-text: #0b2417; --warn-bg: #3a2e12; --warn: #f2c66d;
+      --bad: #ff8c96; --chip: #2a2a2f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 16px 8px;
+    border-bottom: 1px solid var(--line); }
+  .fila { display: flex; gap: 6px; align-items: center; }
+  .fila + .fila { margin-top: 8px; }
+  .tab { flex: 1; border: 0; background: var(--chip); color: var(--text); padding: 8px 6px; border-radius: 999px;
+    font-size: 14px; white-space: nowrap; cursor: pointer; }
+  .tab.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  #recargar { flex: none; width: 38px; height: 36px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--card); color: var(--text); font-size: 17px; cursor: pointer; }
+  .seg { display: flex; flex: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: var(--card); color: var(--text); padding: 0 8px; font-size: 13px;
+    min-height: 36px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+  select { flex: 1; min-width: 0; height: 38px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 14px; }
+  main { padding: 12px 16px 90px; max-width: 760px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .card.neg { border-left: 4px solid var(--bad); }
+  .card.rev { border-left: 4px solid var(--warn); }
+  .meta { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+  .meta b { color: var(--text); font-size: 15px; }
+  .stars { color: #d69e2e; }
+  .resena { margin: 8px 0 4px; white-space: pre-wrap; }
+  .vacia { color: var(--muted); font-style: italic; }
+  .trad, .es { font-size: 14px; color: var(--muted); white-space: pre-wrap; margin: 0 0 8px; }
+  .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin: 8px 0; }
+  textarea { display: block; width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+    font: inherit; background: var(--bg); color: var(--text); resize: vertical; field-sizing: content; min-height: 4.5em; margin: 6px 0; }
+  .publicada { margin: 6px 0; padding: 10px 12px; border-left: 3px solid var(--ok); background: var(--chip);
+    border-radius: 8px; white-space: pre-wrap; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .acciones button { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px;
+    padding: 10px 12px; font-size: 15px; cursor: pointer; }
+  .acciones .prim { flex: 1 1 100%; background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+    font-weight: 600; padding: 13px; font-size: 16px; }
+  .acciones .sec { flex: 1; }
+  .acciones .prim.hecho { background: var(--ok); border-color: var(--ok); color: var(--ok-text); }
+  .etiqueta { font-size: 13px; color: var(--muted); margin: 8px 0 -2px; }
+  button.traducir { border: 1px solid var(--accent); background: var(--card); color: var(--accent); border-radius: 10px;
+    padding: 8px 12px; font-size: 14px; cursor: pointer; margin-bottom: 4px; }
+  button:disabled { opacity: .55; }
+  .nota { color: var(--bad); font-size: 13px; font-weight: 600; }
+  .panel { display: block; width: 100%; text-align: center; padding: 10px; margin: 0 0 12px; border: 1px dashed var(--line);
+    border-radius: 10px; color: var(--accent); background: transparent; text-decoration: none; font: inherit;
+    font-size: 15px; font-weight: 600; cursor: pointer; }
+  .vacio { text-align: center; color: var(--muted); padding: 40px 0; }
+  #toast { position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 728px; margin: 0 auto; background: var(--text);
+    color: var(--bg); padding: 10px 12px 10px 14px; border-radius: 12px; font-size: 15px; display: none; z-index: 5;
+    align-items: center; gap: 10px; }
+  #toast span { flex: 1; }
+  #toast button { border: 0; background: transparent; color: var(--bg); font: inherit; font-weight: 700;
+    text-decoration: underline; cursor: pointer; padding: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="fila" id="tabs"></div>
+  <div class="fila">
+    <div class="seg" id="plataformas" role="group" aria-label="Plataforma"></div>
+    <select id="local" aria-label="Local"></select>
+  </div>
+</header>
+<main id="lista"></main>
+<div id="toast" role="status"><span></span></div>
+
+<script>
+  // Los datos llegan dentro de la propia página: se ve todo al momento, sin "Cargando".
+  const INICIAL = <?!= datosIniciales ?>;
+
+  const PESTANAS = [
+    { id: 'responder', nombre: 'Responder', estados: ['Pendiente', 'Revisar ⚠', 'Error IA (regenerar)'] },
+    { id: 'negativas', nombre: 'Negativas', estados: ['A mano (negativa)'] },
+    { id: 'publicadas', nombre: 'Publicadas', estados: ['Publicada ✔', 'Enviada a Google ⏳'] },
+  ];
+  const PLATAFORMAS = [['', 'Todas'], ['Google', 'Google'], ['TripAdvisor', 'TripAdvisor']];
+  const ESPERA_MAXIMA = 20000;
+  const PANEL_GOOGLE = 'https://business.google.com/u/3/reviews?hl=es'; // todas las reseñas de Google, con su botón Responder
+
+  let datos = (INICIAL && INICIAL.resenas) || [];
+  let auto = (INICIAL && INICIAL.auto) || null; // publicación automática en Google (vía Make)
+  const guardado = k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
+  const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
+  let pestana = guardado('pestana') || 'responder';
+  let plataforma = guardado('plataforma');
+  let local = '';
+
+  const $ = id => document.getElementById(id);
+  const el = (tag, cls, texto) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (texto !== undefined) e.textContent = texto; // nunca innerHTML con texto de reseñas
+    return e;
+  };
+  const boton = (texto, cls, fn) => { const b = el('button', cls, texto); b.type = 'button'; b.onclick = fn; return b; };
+
+  // ------------------------------------------------------------- servidor
+  // Llamada con tope de tiempo: con varias cuentas de Google abiertas, google.script.run se pierde sin avisar.
+  function llamar(fn, args, ok, ko, sinTope) {
+    let hecho = false;
+    const t = sinTope ? 0 : setTimeout(() => { if (!hecho) { hecho = true; ko(new Error('sin respuesta (¿varias cuentas de Google abiertas?)')); } }, ESPERA_MAXIMA);
+    google.script.run
+      .withSuccessHandler(r => { if (hecho) return; hecho = true; clearTimeout(t); ok(r); })
+      .withFailureHandler(e => { if (hecho) return; hecho = true; clearTimeout(t); ko(e); })[fn](...args);
+  }
+
+  function recargar() {
+    const b = $('recargar');
+    b.disabled = true;
+    llamar('colaDatos', [], r => {
+      b.disabled = false;
+      try { r = typeof r === 'string' ? JSON.parse(r) : r; } catch (e) { r = null; }
+      if (!r || !r.resenas) return aviso('La hoja no devolvió datos. Prueba otra vez.');
+      datos = r.resenas;
+      auto = r.auto || null;
+      pintar();
+    }, e => { b.disabled = false; aviso('No se pudo actualizar: ' + e.message); });
+  }
+
+  // Cambio de estado al instante; si el servidor falla, se deshace y se avisa.
+  function cambiar(r, accion, texto, estadoNuevo, mensaje, conDeshacer) {
+    const antes = { estado: r.estado, publicada: r.publicada };
+    const restaurar = () => { r.estado = antes.estado; r.publicada = antes.publicada; pintar(); };
+    r.estado = estadoNuevo;
+    if (accion === 'publicada') r.publicada = texto;
+    pintar();
+    let enCurso = true, deshacerAlTerminar = false;
+    const reabrir = () => llamar('colaAccion', [r.id, 'reabrir', {}], () => {}, e => aviso('No se pudo deshacer: ' + e.message));
+    aviso(mensaje, conDeshacer ? () => {
+      restaurar();
+      if (enCurso) deshacerAlTerminar = true; else reabrir(); // en orden: primero el cambio, luego deshacerlo
+    } : null);
+    llamar('colaAccion', [r.id, accion, { texto: texto }], () => {
+      enCurso = false;
+      if (deshacerAlTerminar) reabrir();
+    }, e => {
+      enCurso = false;
+      if (!deshacerAlTerminar) restaurar();
+      aviso('No se guardó: ' + e.message);
+    });
+  }
+
+  function redactar(r, b, instruccion) {
+    const texto = b.textContent;
+    b.disabled = true;
+    b.textContent = 'Redactando…';
+    llamar('colaAccion', [r.id, 'regenerar', { instruccion: instruccion || '' }], s => {
+      r.respuesta = s.respuesta;
+      r.respuestaEs = s.respuestaEs || '';
+      r.aviso = s.aviso || '';
+      r.porTraducir = false;
+      if (r.estado === 'Error IA (regenerar)') r.estado = 'Pendiente';
+      pintar();
+    }, e => { b.disabled = false; b.textContent = texto; aviso('Error: ' + e.message); });
+  }
+
+  // ------------------------------------------------------------- pintar
+  function visibles() {
+    return datos.filter(r => (!plataforma || r.plataforma === plataforma) && (!local || r.restaurante === local));
+  }
+
+  function pintar() {
+    const lista = visibles();
+    const enPestana = id => lista.filter(r => PESTANAS.find(p => p.id === id).estados.indexOf(r.estado) >= 0);
+
+    const tabs = $('tabs');
+    tabs.replaceChildren();
+    PESTANAS.forEach(p => tabs.appendChild(boton(p.nombre + ' ' + enPestana(p.id).length,
+      'tab' + (p.id === pestana ? ' on' : ''), () => { pestana = p.id; guardar('pestana', pestana); pintar(); scrollTo(0, 0); })));
+    const rec = boton('↻', '', recargar);
+    rec.id = 'recargar';
+    rec.title = 'Actualizar';
+    tabs.appendChild(rec);
+
+    const seg = $('plataformas');
+    seg.replaceChildren();
+    PLATAFORMAS.forEach(([v, n]) => seg.appendChild(boton(n, v === plataforma ? 'on' : '',
+      () => { plataforma = v; guardar('plataforma', v); pintar(); })));
+
+    const sel = $('local');
+    const locales = [...new Set(datos.map(r => r.restaurante))].sort();
+    if (locales.indexOf(local) < 0) local = '';
+    sel.replaceChildren(el('option', '', 'Todos los locales'));
+    sel.options[0].value = '';
+    locales.forEach(l => { const o = el('option', '', l); o.value = l; sel.appendChild(o); });
+    sel.value = local;
+
+    const items = enPestana(pestana);
+    const main = $('lista');
+    const frag = document.createDocumentFragment();
+    const panel = el('a', 'panel', 'Abrir todas las reseñas en Google ↗');
+    panel.href = PANEL_GOOGLE;
+    panel.target = '_blank';
+    panel.rel = 'noopener';
+    frag.appendChild(panel);
+    if (pestana !== 'publicadas' && items.some(r => r.respuesta)) {
+      frag.appendChild(boton(rehaciendo ? 'Reescribiendo… (pulsa ↻ en unos minutos)' : '↻ Rehacer todas las respuestas sin publicar',
+        'panel todas', rehacerTodas)).disabled = rehaciendo;
+    }
+    if (!items.length) {
+      frag.appendChild(el('p', 'vacio', pestana === 'publicadas' ? 'Aquí verás lo publicado en los últimos 60 días.'
+        : pestana === 'negativas' ? 'Ninguna negativa pendiente 🙌' : 'Todo respondido 🎉'));
+    }
+    items.forEach(r => frag.appendChild(pestana === 'publicadas' ? tarjetaPublicada(r) : tarjeta(r)));
+    main.replaceChildren(frag);
+  }
+
+  function cabecera(c, r) {
+    const meta = el('div', 'meta');
+    meta.appendChild(el('b', '', r.restaurante));
+    meta.appendChild(el('span', 'stars', '★'.repeat(Math.max(0, r.estrellas)) + '☆'.repeat(Math.max(0, 5 - r.estrellas))));
+    meta.appendChild(el('span', '', r.cliente));
+    meta.appendChild(el('span', '', [r.plataforma, hace(r.fecha)].filter(Boolean).join(' · ')));
+    c.appendChild(meta);
+    c.appendChild(el('div', 'resena' + (r.resena ? '' : ' vacia'), r.resena || 'Solo puntuación, sin texto.'));
+    if (r.traduccion) c.appendChild(el('div', 'trad', '🇪🇸 ' + r.traduccion));
+  }
+
+  function tarjeta(r) {
+    const negativa = r.estado === 'A mano (negativa)';
+    const c = el('article', 'card' + (negativa ? ' neg' : r.aviso ? ' rev' : ''));
+    cabecera(c, r);
+    if (r.estado === 'Error IA (regenerar)') c.appendChild(el('div', 'nota', 'La IA no pudo redactarla: pulsa "Otra versión".'));
+    if (r.aviso) c.appendChild(el('div', 'aviso', '⚠ ' + r.aviso));
+
+    const acciones = el('div', 'acciones');
+    if (negativa && !r.respuesta) {
+      acciones.appendChild(boton('✍ Redactar borrador', 'prim', e => pedirContexto(r, e.currentTarget)));
+    } else if (!r.respuesta) {
+      c.appendChild(el('div', 'vacia', 'La respuesta se está escribiendo. Pulsa ↻ en unos minutos o redáctala ya.'));
+      acciones.appendChild(boton('✍ Redactar ahora', 'prim', e => redactar(r, e.currentTarget, '')));
+    } else {
+      const ta = el('textarea');
+      ta.value = r.respuesta || '';
+      ta.rows = Math.max(3, Math.ceil(ta.value.length / 42));
+      // Si la respuesta no está en español, se edita en español y se traduce al idioma del cliente.
+      const enEspanol = Boolean(r.respuestaEs);
+      if (enEspanol) {
+        c.appendChild(el('div', 'etiqueta', 'En español (edita aquí)'));
+        const taEs = el('textarea');
+        taEs.value = r.respuestaEs;
+        taEs.rows = Math.max(3, Math.ceil(taEs.value.length / 42));
+        c.appendChild(taEs);
+        const traducir = boton('↻ Traducir al idioma del cliente', 'traducir', e => {
+          const b = e.currentTarget;
+          b.disabled = true;
+          b.textContent = 'Traduciendo…';
+          llamar('colaAccion', [r.id, 'traducir', { texto: taEs.value }], res => {
+            r.respuesta = res.respuesta;
+            r.respuestaEs = res.respuestaEs;
+            r.porTraducir = false;
+            pintar();
+            aviso('Traducida ✔');
+          }, err => { b.disabled = false; b.textContent = '↻ Traducir al idioma del cliente'; aviso('Error: ' + err.message); });
+        });
+        traducir.style.display = r.porTraducir ? '' : 'none';
+        c.appendChild(traducir);
+        taEs.oninput = () => { r.respuestaEs = taEs.value; r.porTraducir = true; traducir.style.display = ''; ta.style.opacity = '.45'; };
+        if (r.porTraducir) ta.style.opacity = '.45';
+        c.appendChild(el('div', 'etiqueta', 'Se publicará así:'));
+        c.appendChild(ta);
+        ta.oninput = () => { r.respuesta = ta.value; };
+      } else {
+        c.appendChild(ta);
+        const es = el('div', 'es', r.respuestaEs ? '🇪🇸 ' + r.respuestaEs : '');
+        if (r.respuestaEs) c.appendChild(es);
+        ta.oninput = () => { r.respuesta = ta.value; es.style.opacity = '.45'; };
+      }
+      // Si se cambió el español y no se tradujo, no se deja publicar el texto viejo.
+      const listo = () => {
+        if (!r.porTraducir) return true;
+        aviso('Has cambiado el texto en español: pulsa "Traducir" antes de publicar.');
+        return false;
+      };
+
+      if (r.plataforma === 'TripAdvisor') {
+        // TripAdvisor: copiar y abrir no garantiza publicar (hay que hacerlo desde la cuenta de gestión),
+        // así que se confirma aparte.
+        if (!r.copiada) {
+          acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'prim', () => {
+            if (!listo()) return;
+            copiar(ta.value);
+            if (r.url) window.open(r.url, '_blank');
+            r.copiada = true;
+            pintar();
+            aviso('Copiada ✔ Respóndela en TripAdvisor y vuelve a pulsar "Ya está publicada".');
+          }));
+        } else {
+          acciones.appendChild(boton('✓ Ya está publicada', 'prim hecho', () =>
+            cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Publicada ✔', true)));
+          acciones.appendChild(boton('📋 Copiar otra vez', 'sec', () => { copiar(ta.value); aviso('Copiada ✔'); }));
+        }
+      } else if (auto) {
+        // Google con publicación directa; si no se toca, las positivas sin avisos salen solas en horario.
+        if (!negativa && !r.aviso && r.estrellas >= auto.minEstrellas) {
+          c.appendChild(el('div', 'es', 'Si no la tocas, se publica sola entre las ' + auto.desde + ':00 y las ' +
+            auto.hasta + ':00.'));
+        }
+        acciones.appendChild(boton('Publicar en Google', 'prim', () => { if (listo()) publicarGoogle(r, ta.value); }));
+        acciones.appendChild(boton('📋 Copiar y abrir', 'sec', () => {
+          if (!listo()) return;
+          copiar(ta.value);
+          if (r.url) window.open(r.url, '_blank');
+          cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
+        }));
+      } else {
+        // Un solo toque: copia, abre la reseña y la pasa a Publicadas (con Deshacer, y "Devolver" en Publicadas).
+        acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'prim', () => {
+          if (!listo()) return;
+          copiar(ta.value);
+          if (r.url) window.open(r.url, '_blank');
+          cambiar(r, 'publicada', ta.value, 'Publicada ✔', 'Copiada y pasada a Publicadas ✔', true);
+        }));
+      }
+      acciones.appendChild(negativa
+        ? boton('✍ Otro borrador', 'sec', e => pedirContexto(r, e.currentTarget))
+        : boton('↻ Otra versión', 'sec', e => redactar(r, e.currentTarget, '')));
+    }
+    acciones.appendChild(boton('Descartar', 'sec', () => cambiar(r, 'descartar', '', 'Descartada', 'Descartada', true)));
+    c.appendChild(acciones);
+    return c;
+  }
+
+  function tarjetaPublicada(r) {
+    const c = el('article', 'card');
+    cabecera(c, r);
+    c.appendChild(el('div', 'publicada', r.publicada || r.respuesta || 'Publicada fuera de la cola.'));
+    if (r.estado === 'Enviada a Google ⏳') c.appendChild(el('div', 'es', 'Enviada a Google. Se confirmará al leerla publicada.'));
+    const acciones = el('div', 'acciones');
+    acciones.appendChild(boton(r.url ? '📋 Copiar y abrir' : '📋 Copiar', 'sec', () => {
+      copiar(r.publicada || r.respuesta || '');
+      if (r.url) window.open(r.url, '_blank');
+      aviso('Copiada ✔');
+    }));
+    acciones.appendChild(boton('↩ Devolver a pendientes', 'sec', () => {
+      const estado = r.estrellas < 4 ? 'A mano (negativa)' : 'Pendiente';
+      r.copiada = false;
+      cambiar(r, 'reabrir', '', estado, 'Devuelta a pendientes');
+    }));
+    c.appendChild(acciones);
+    return c;
+  }
+
+  // Publicar en Google vía Make: se mueve al momento y, si Make falla, vuelve con el motivo.
+  function publicarGoogle(r, texto) {
+    const antes = { estado: r.estado, publicada: r.publicada };
+    r.estado = 'Enviada a Google ⏳';
+    r.publicada = texto;
+    pintar();
+    aviso('Publicando en Google…');
+    llamar('colaAccion', [r.id, 'publicarYa', { texto: texto }], res => {
+      r.estado = (res && res.estado) || 'Enviada a Google ⏳';
+      if (res && res.publicada) r.publicada = res.publicada;
+      pintar();
+      aviso((res && res.mensaje) || (r.estado === 'Publicada ✔' ? 'Publicada en Google ✔' : 'Enviada a Google ✔'));
+    }, e => {
+      r.estado = antes.estado; r.publicada = antes.publicada;
+      pintar();
+      aviso('No se publicó: ' + e.message);
+    }, true); // sin tope: si hay que buscarla entre las antiguas tarda más
+  }
+
+  let rehaciendo = false;
+  function rehacerTodas() {
+    if (!confirm('Se volverán a escribir todas las respuestas sin publicar (Responder y Negativas). ' +
+      'Las que tienen una indicación del equipo no se tocan. ¿Seguir?')) return;
+    rehaciendo = true;
+    pintar();
+    llamar('colaAccion', ['', 'rehacerTodo', {}], res => {
+      aviso((res && res.cuantos) + ' respuestas se están reescribiendo. Tardan unos minutos.');
+      recargar();
+      // Redacta ya las primeras (unas 25); el resto, en las siguientes vueltas automáticas.
+      llamar('colaAccion', ['', 'redactarPendientes', {}], () => { rehaciendo = false; recargar(); },
+        () => { rehaciendo = false; pintar(); }, true);
+    }, e => { rehaciendo = false; pintar(); aviso('No se pudo: ' + e.message); });
+  }
+
+  function pedirContexto(r, b) {
+    const instruccion = prompt('¿Qué pasó o qué quieres transmitir? (opcional)', '');
+    if (instruccion !== null) redactar(r, b, instruccion);
+  }
+
+  // ------------------------------------------------------------- utilidades
+  function copiar(texto) {
+    // Copia sin enfocar el cuadro (en el móvil, enfocarlo abre el teclado).
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).catch(() => copiarAntiguo(texto));
+    } else {
+      copiarAntiguo(texto);
+    }
+  }
+  function copiarAntiguo(texto) {
+    const t = el('textarea');
+    t.value = texto;
+    t.setAttribute('readonly', '');
+    t.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    document.body.appendChild(t);
+    t.select();
+    t.setSelectionRange(0, texto.length);
+    try { document.execCommand('copy'); } catch (e) { /* sin portapapeles */ }
+    t.remove();
+  }
+
+  let temporizador;
+  function aviso(texto, deshacer) {
+    const t = $('toast');
+    t.firstChild.textContent = texto;
+    while (t.childNodes.length > 1) t.lastChild.remove();
+    if (deshacer) t.appendChild(boton('Deshacer', '', () => { t.style.display = 'none'; deshacer(); }));
+    t.style.display = 'flex';
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => { t.style.display = 'none'; }, deshacer ? 5000 : 3500);
+  }
+
+  function hace(iso) {
+    const h = Math.round((Date.now() - new Date(iso).getTime()) / 3600000);
+    if (isNaN(h)) return '';
+    if (h < 1) return 'hace un rato';
+    if (h < 24) return 'hace ' + h + ' h';
+    const d = Math.round(h / 24);
+    return 'hace ' + d + (d === 1 ? ' día' : ' días');
+  }
+
+  $('local').onchange = e => { local = e.target.value; pintar(); };
+  pintar();
+  if (INICIAL && INICIAL.error) aviso('Error al leer la hoja: ' + INICIAL.error);
+</script>
+</body>
+</html>
