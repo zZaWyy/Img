@@ -58,7 +58,7 @@ const CONFIG = {
 
   // --- Avisos por correo ---
   EMAIL_AVISOS: '',                      // vacío = el de la cuenta dueña; varios, separados por comas
-  AVISAR_NEGATIVAS: true,
+  AVISAR_NEGATIVAS: false,
   // Las negativas también reciben un borrador (siguen "A mano": se revisan
   // siempre antes de publicar).
   BORRADOR_NEGATIVAS: true,

@@ -426,7 +426,7 @@ Al principio de `Code.gs`, bloque `CONFIG`. Tras cambiar algo, guarda 💾:
 - `MODELOS`: orden de modelos de IA.
 - `EMAIL_AVISOS`: a quién llegan los correos. Vacío = la cuenta dueña de la
   hoja; varios, separados por comas.
-- `AVISAR_NEGATIVAS` (true) y `RESUMEN_DIARIO_HORA` (10; 0 lo desactiva).
+- `AVISAR_NEGATIVAS` (false) y `RESUMEN_DIARIO_HORA` (10; 0 lo desactiva).
 - `INFORME_SEMANAL_DIA` (1 = lunes … 7 = domingo; 0 lo desactiva) e
   `INFORME_SEMANAL_HORA` (9).
 - `HORAS_SIN_BORRADORES_AVISO` (6): tras cuántas horas sin borradores se
