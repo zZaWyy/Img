@@ -29,7 +29,7 @@ const CONFIG = {
   HORAS_ENTRE_LECTURAS_TRIPADVISOR: 12,
   // Repaso diario de los últimos días: recoge reseñas que Google muestra
   // con retraso y detecta las respuestas ya publicadas.
-  DIAS_REPASO: 3,
+  DIAS_REPASO: 4,                        // 4 para que cubra también la comprobación de las 48 h
   RESENAS_POR_RESTAURANTE: 100,          // tope por local y lectura
   DIAS_MAXIMOS: 31,                      // reseñas más antiguas no se apuntan
   // "Recuperar reseñas sin responder": hasta cuántos días atrás mira.
@@ -59,6 +59,10 @@ const CONFIG = {
   // --- Avisos por correo ---
   EMAIL_AVISOS: '',                      // vacío = el de la cuenta dueña; varios, separados por comas
   AVISAR_NEGATIVAS: false,
+  // Controles antes de publicar (true = activado). Ver GUIA.md, "Controles antes de publicar".
+  ENRUTADO_RIESGO: true,                 // salud, alergias, temas legales, nota que no cuadra… → a revisión
+  FILTRO_CALIDAD: true,                  // reglas fijas: longitud, frases prohibidas, cifras, nombres, otros locales…
+  VERIFICAR_48H: true,                   // 48 h después, comprueba con las lecturas de Apify que se ve en Google
   // Las negativas también reciben un borrador (siguen "A mano": se revisan
   // siempre antes de publicar).
   BORRADOR_NEGATIVAS: true,
@@ -190,6 +194,52 @@ NEGATIVAS (1-3★): borrador que el equipo revisará antes de publicar
 EVITA
 - Inventar algo que no esté en la reseña o en las notas: datos, promesas, nombres, correos, teléfonos o webs.
 - Empezar con fórmulas gastadas: "Da gusto leer", "¡Qué alegría leer esto!", "¡Muchas gracias por tu reseña/valoración!", "Nos alegra mucho", "Thank you so much for your review", "We're thrilled/delighted", ni sus equivalentes en otros idiomas.
+- Muletillas: "a la altura", "experiencia inolvidable", "un montón", "de diez", "no tiene precio", "joya escondida", "hidden gem", "culinary journey", "delve", "elevate".
+- Rayas largas (—), enumeraciones de tres adjetivos y más de dos signos de exclamación.
+- Firmar o poner comillas: la plataforma ya muestra el nombre del restaurante.
+- Horarios, precios, cifras, webs, correos o teléfonos que no estén en la reseña. Nunca digas que un local abre 24 horas.
+- Mencionar otros locales del grupo (en Playas del Rey sí puedes nombrar su bar, N76).
+
+CASOS ESPECIALES
+- Alergias y salud: nunca confirmes, comentes ni repitas datos de salud o alergias del cliente. Si cuenta una reacción, una intoxicación o un problema de salud, escribe solo un borrador breve y neutro: el equipo lo revisará.
+- Empleados: en positivas, usa el nombre de pila tal como lo escribe el cliente y di que se lo haréis llegar. En negativas, nunca repitas el nombre ni le des la razón.
+- Reseñas que parecen falsas, de otro negocio o spam: márcalo en "sospecha" y escribe solo una respuesta breve y neutra; el equipo decidirá si la denuncia. Nunca acuses al autor.
+- Hoja de reclamaciones, abogados, denuncias o policía: borrador breve y neutro, sin discutir; el equipo lo revisará.
+- Datos personales: nunca uses nombres completos, datos de reserva, pagos ni nada que el cliente no haya escrito.
+- No admitas culpa ni des por ciertos los hechos: lamenta que la experiencia no fuera la esperada. Nada de "sentimos que le causara…" ni parecidos.
+
+DIRECTIVAS: una línea que empieza por "->" es una indicación del equipo y manda sobre todo lo anterior.
+
+Devuelve solo el texto a publicar.`;
+
+/** Prompt de la versión 3.6-3.7 (sin casos especiales): si la hoja aún lo tiene sin cambios, se sustituye. */
+const PROMPT_V36 = `Respondes, en nombre del equipo, las reseñas de Google y TripAdvisor de los restaurantes de Unicum Group en Santa Ponsa y Palma (Mallorca). Escribes como una persona del equipo: cercana, natural y concreta. El objetivo: que el cliente note que alguien ha leído de verdad su reseña y que quien la lea después tenga ganas de venir.
+
+IDIOMA Y TRATO
+- Responde siempre en el idioma de la reseña. Sin texto: en el idioma que sugiera el nombre solo si es muy claro; si dudas, en español.
+- Adapta el trato al del cliente: en español, tú o vosotros; si escribe en plural ("fuimos", "we"), responde en plural. En alemán, francés y neerlandés, usa la forma de cortesía salvo que el cliente tutee.
+- Usa el nombre de pila si parece un nombre real; si es un alias o unas iniciales, no lo uses.
+
+LONGITUD
+- Respeta la longitud máxima que se indica con cada reseña: es lo más importante. Mejor corta y concreta que larga y genérica.
+- Nunca más larga que la propia reseña, salvo en reseñas sin texto o de pocas palabras.
+
+POSITIVAS
+- Recoge uno o dos detalles concretos de la reseña (un plato, una persona, un momento). Si nombra a alguien del equipo, di que se lo haréis llegar.
+- Agradece con naturalidad, sin fórmulas. Invita a volver solo si queda natural y varía la forma de hacerlo.
+- Keywords: como mucho una, y solo si el cliente habla de ese tema (si menciona la paella, puedes decir "paella"). No añadas temas que no ha mencionado (vistas, terraza, cocina mediterránea…). Si respondes en otro idioma, tradúcela.
+- Emojis: como mucho uno, y solo si la reseña es entusiasta.
+- Si una reseña positiva menciona algún problema, reconócelo en una frase, sin excusas.
+
+NEGATIVAS (1-3★): borrador que el equipo revisará antes de publicar
+- Muy breve: dos o tres frases. Discúlpate porque la experiencia no fue la que esperaba, agradece que nos lo haya hecho saber y di que esperas recibirle de nuevo para ofrecerle la atención que merece.
+- Neutra: no repitas ni des por buenas sus quejas ni sus palabras (nunca algo como "sentimos haberle atendido fatal"), no detalles lo que salió mal y no des explicaciones ni discutas.
+- No invites a contactar ni a escribir en privado, y no prometas cambios ni compensaciones.
+- Tono sereno: sin emojis ni exclamaciones.
+
+EVITA
+- Inventar algo que no esté en la reseña o en las notas: datos, promesas, nombres, correos, teléfonos o webs.
+- Empezar con fórmulas gastadas: "Da gusto leer", "¡Qué alegría leer esto!", "¡Muchas gracias por tu reseña/valoración!", "Nos alegra mucho", "Thank you so much for your review", "We're thrilled/delighted", ni sus equivalentes en otros idiomas.
 - Muletillas: "a la altura", "experiencia inolvidable", "un montón", "de diez", "no tiene precio".
 - Rayas largas (—), enumeraciones de tres adjetivos y más de dos signos de exclamación.
 - Firmar o poner comillas: la plataforma ya muestra el nombre del restaurante.
@@ -261,7 +311,7 @@ DIRECTIVAS: una línea que empieza por "->" es una indicación del equipo y mand
 
 Devuelve solo el texto a publicar.`;
 
-const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA (borrador que el equipo revisará). Dos o tres frases: discúlpate porque la experiencia no fue la esperada, agradece que nos lo haga saber y di que esperas recibirle de nuevo para ofrecerle la atención que merece. No repitas ni confirmes sus quejas ni sus palabras, no detalles lo ocurrido, no des explicaciones, no invites a contactar y no prometas nada (salvo que la directiva "->" lo indique; si explica lo sucedido, puedes apoyarte en ella). Sin emojis ni exclamaciones.';
+const INSTRUCCION_NEGATIVA = 'Esta reseña es NEGATIVA (borrador que el equipo revisará). Dos o tres frases: discúlpate porque la experiencia no fue la esperada, agradece que nos lo haga saber y di que esperas recibirle de nuevo para ofrecerle la atención que merece. No repitas ni confirmes sus quejas ni sus palabras (tampoco el nombre de ningún empleado), no admitas culpa, no detalles lo ocurrido, no des explicaciones, no invites a contactar y no prometas nada (salvo que la directiva "->" lo indique; si explica lo sucedido, puedes apoyarte en ella). Sin emojis ni exclamaciones.';
 
 /** Arranques de plantilla: los ejemplos que empiezan así pesan menos al elegir el estilo. */
 const APERTURA_GASTADA = /^\W*(muchas gracias|mil gracias|muchísimas gracias|gracias por (tu|su|vuestra) (reseña|valoración|opinión)|thank you( so much| very much)?( for (your|the))?|thanks (so much )?for|vielen (lieben )?dank|merci beaucoup|grazie mille|da gusto leer|qué alegría leer)/i;
@@ -282,8 +332,20 @@ const ESQUEMA_RESPUESTA = {
       type: 'STRING',
       description: 'Si "respuesta" no está en español, su traducción al español para que el equipo la entienda; si ya está en español, vacío.',
     },
+    sentimiento: {
+      type: 'STRING', format: 'enum', enum: ['positivo', 'neutro', 'negativo'],
+      description: 'Sentimiento real del TEXTO de la reseña (no de la nota): ojo con el sarcasmo. Sin texto: según la nota.',
+    },
+    empleado: {
+      type: 'STRING',
+      description: 'Nombre de pila de la persona del equipo que nombra la reseña, tal como lo escribe el cliente; vacío si no nombra a nadie.',
+    },
+    sospecha: {
+      type: 'STRING', format: 'enum', enum: ['no', 'falsa', 'otro_negocio', 'spam'],
+      description: '"falsa", "otro_negocio" (habla de otro sitio) o "spam" si la reseña lo parece claramente; si no, "no".',
+    },
   },
-  required: ['respuesta', 'aviso', 'traduccion', 'respuesta_es'],
+  required: ['respuesta', 'aviso', 'traduccion', 'respuesta_es', 'sentimiento', 'empleado', 'sospecha'],
 };
 
 const ESQUEMA_TRADUCCION = {
@@ -572,7 +634,7 @@ function migrarVersion_() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('INSTALADO')) props.setProperty('INSTALADO', String(Date.now()));
   const version = props.getProperty('VERSION');
-  if (version === '3.7') return;
+  if (version === '3.8') return;
   const antesDe = v => !version || Number(version) < v;
   if (antesDe(3)) pedirRecuperacion_();   // rescata las reseñas sin responder del último mes
   if (antesDe(3.1)) {
@@ -590,7 +652,8 @@ function migrarVersion_() {
     rehacerBorradoresNegativas_();             // negativas con el tono nuevo (breve y neutro)
   }
   if (antesDe(3.7)) estimarUsoMakeAnterior_();  // antes no se contaban los créditos de Make
-  props.setProperty('VERSION', '3.7');
+  if (antesDe(3.8)) revisarBorradoresAbiertos_(); // controles de riesgo y calidad sobre lo ya redactado
+  props.setProperty('VERSION', '3.8');
 }
 
 /** Locales traspasados a otra sociedad (octubre 2026): fuera del sistema. */
@@ -625,7 +688,7 @@ function actualizarPromptSiNoSeToco_() {
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA.PROMPT);
   if (!hoja) return;
   const actual = String(hoja.getRange(2, 1).getValue() || '').trim();
-  if (actual && actual !== PROMPT_V3.trim() && actual !== PROMPT_V35.trim()) return; // editado por el equipo: se respeta
+  if (actual && [PROMPT_V3, PROMPT_V35, PROMPT_V36].every(v => actual !== v.trim())) return; // editado por el equipo: se respeta
   hoja.getRange(2, 1).setValue(PROMPT_POR_DEFECTO);
 }
 
@@ -778,7 +841,7 @@ function comprobarLectura_(clave) {
     return;
   }
   const items = apify_('GET', 'datasets/' + run.data.defaultDatasetId + '/items?clean=true&format=json') || [];
-  conBloqueo_(() => procesarLectura_(clave, items));
+  conBloqueo_(() => procesarLectura_(clave, items, lectura.inicio));
   props.setProperty('OK_' + clave, String(lectura.inicio));
 }
 
@@ -823,7 +886,7 @@ function lanzarLecturaSiToca_(clave) {
 }
 
 /** Pasa a la hoja las reseñas de una lectura y aprende de las ya respondidas. */
-function procesarLectura_(clave, items) {
+function procesarLectura_(clave, items, inicioLectura) {
   const restaurantes = leerRestaurantes_();
   const resenas = items.map(FUENTES[clave].normalizar).filter(r => r.id.length > 2);
   resenas.forEach(r => {
@@ -839,6 +902,7 @@ function procesarLectura_(clave, items) {
   const negativas = [];
   const ejemplos = [];
   const vistas = {};
+  const sinRespuesta = [];
 
   resenas.forEach(r => {
     if (vistas[r.id]) return;
@@ -846,6 +910,7 @@ function procesarLectura_(clave, items) {
     const fila = indice[r.id];
     if (fila) {
       if (r.respuestaPropietario) registrarPublicada_(hoja, fila, r.respuestaPropietario);
+      else sinRespuesta.push(fila);
       return;
     }
     if (r.respuestaPropietario) {
@@ -861,9 +926,30 @@ function procesarLectura_(clave, items) {
     if (negativa) negativas.push(r);
   });
 
+  // Si la lectura trae respuestas del propietario (es decir, las ve), las publicadas hace
+  // más de 48 h que salen sin respuesta no se ven en Google: moderación, rechazo o no se pegaron.
+  if (CONFIG.VERIFICAR_48H && clave === 'google' && inicioLectura && resenas.some(r => r.respuestaPropietario)) {
+    sinRespuesta.forEach(fila => comprobarVisible_(hoja, fila, inicioLectura));
+  }
   if (ejemplos.length) agregarEjemplos_(ejemplos, ORIGEN.HISTORICO);
   if (nuevas.length) anadirFilas_(hoja, nuevas);
   if (negativas.length && CONFIG.AVISAR_NEGATIVAS) avisarNegativas_(negativas);
+}
+
+const AVISO_NO_VISIBLE = 'No visible en Google 48 h después de publicarla';
+
+/** Publicada hace más de 48 h pero la lectura la ve sin respuesta: a revisar. */
+function comprobarVisible_(hoja, fila, inicioLectura) {
+  const v = hoja.getRange(fila, 1, 1, CABECERA.length).getValues()[0];
+  if (v[COL.ESTADO - 1] !== ESTADO.PUBLICADA || v[COL.PLATAFORMA - 1] !== 'Google') return;
+  const m = /(?:Publicada automáticamente|Marcada como publicada) el (\d\d)\/(\d\d)\/(\d{4}) (\d\d):(\d\d)/
+    .exec(hoja.getRange(fila, COL.ESTADO).getNote() || '');
+  if (!m) return; // no sabemos cuándo se publicó
+  const cuando = new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]).getTime();
+  if (inicioLectura - cuando < 48 * HORA) return;
+  hoja.getRange(fila, COL.ESTADO).setValue(ESTADO.REVISAR);
+  hoja.getRange(fila, COL.AVISO).setValue(sumarAviso_(String(v[COL.AVISO - 1] || ''), AVISO_NO_VISIBLE +
+    ' (puede estar retenida por la moderación de Google o no haberse publicado). Compruébala y vuelve a publicarla si hace falta.'));
 }
 
 /** Marca una fila como publicada y aprende si el texto final cambió. */
@@ -871,6 +957,9 @@ function registrarPublicada_(hoja, fila, textoPublicado) {
   const valores = hoja.getRange(fila, 1, 1, CABECERA.length).getValues()[0];
   if (valores[COL.ESTADO - 1] !== ESTADO.DESCARTADA) {
     hoja.getRange(fila, COL.ESTADO).setValue(ESTADO.PUBLICADA);
+  }
+  if (String(valores[COL.AVISO - 1] || '').indexOf(AVISO_NO_VISIBLE) >= 0) {
+    hoja.getRange(fila, COL.AVISO).setValue(String(valores[COL.AVISO - 1]).replace(/No visible en Google[^.]*\.[^.]*\./, '').trim());
   }
   if (!valores[COL.PUBLICADA - 1] && textoPublicado) {
     hoja.getRange(fila, COL.PUBLICADA).setValue(textoPublicado);
@@ -1158,21 +1247,50 @@ function redactar_(fila, contexto, instruccion, manual) {
 
   const largo = texto.length >= CONFIG.LONGITUD_RESENA_CORTA;
   const mejor = manual || (largo && !historica) || geminiPago_();
-  const salida = llamarIA_(contexto.prompt, p.join('\n'), mejor ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
+  let salida = llamarIA_(contexto.prompt, p.join('\n'), mejor ? 0 : CONFIG.MODELO_PARA_RESENAS_CORTAS);
 
   // Comprobación de idioma (salvo que el equipo haya dado una indicación propia).
   const comprobar = lengua && !instruccion && texto.length >= 20;
-  if (!comprobar || !idiomaDistinto_(idioma, salida.respuesta)) return avisarSiCortada_(salida);
-  try {
-    const otra = llamarIA_(contexto.prompt, p.join('\n') + '\n-> IMPORTANTE: tu respuesta anterior no estaba en ' +
-      lengua + '. Escríbela entera en ' + lengua + '.', 0);
-    if (!idiomaDistinto_(idioma, otra.respuesta)) return avisarSiCortada_(otra);
-  } catch (e) {
-    if (e.tipo === 'clave') throw e;
+  if (comprobar && idiomaDistinto_(idioma, salida.respuesta)) {
+    let otra = null;
+    try {
+      otra = llamarIA_(contexto.prompt, p.join('\n') + '\n-> IMPORTANTE: tu respuesta anterior no estaba en ' +
+        lengua + '. Escríbela entera en ' + lengua + '.', 0);
+    } catch (e) {
+      if (e.tipo === 'clave') throw e;
+    }
+    if (otra && !idiomaDistinto_(idioma, otra.respuesta)) {
+      salida = otra;
+    } else {
+      salida.aviso = sumarAviso_(salida.aviso, 'La respuesta no parece estar en ' + lengua + ': revísala o pide otra versión.');
+    }
   }
-  salida.aviso = (salida.aviso ? salida.aviso + ' ' : '') + 'La respuesta no parece estar en ' + lengua +
-    ': revísala o pide otra versión.';
-  return avisarSiCortada_(salida);
+  return revisarRedaccion_(salida, fila, contexto.prompt, p.join('\n'), instruccion);
+}
+
+/**
+ * Tras redactar: filtro de calidad (si falla, se pide una vez otra versión diciendo
+ * qué corregir) y motivos de riesgo. Lo que quede va al aviso, y con aviso la fila
+ * pasa a "Revisar ⚠" y no se publica sola.
+ */
+function revisarRedaccion_(salida, fila, sistema, usuario, instruccion) {
+  let problemas = problemasCalidad_(salida.respuesta, fila, salida);
+  if (problemas.length && !instruccion) {
+    try {
+      const otra = llamarIA_(sistema, usuario + '\n-> IMPORTANTE: reescríbela corrigiendo esto: ' + problemas.join('; ') + '.', 0);
+      const nuevos = problemasCalidad_(otra.respuesta, fila, otra);
+      if (nuevos.length < problemas.length && !idiomaDistinto_(fila[COL.IDIOMA - 1], otra.respuesta)) {
+        salida = Object.assign({}, salida, { respuesta: otra.respuesta, respuesta_es: otra.respuesta_es, modelo: otra.modelo });
+        problemas = nuevos;
+      }
+    } catch (e) {
+      if (e.tipo === 'clave') throw e;
+    }
+  }
+  if (problemas.length) salida.aviso = sumarAviso_(salida.aviso, 'Filtro de calidad: ' + problemas.join('; ') + '.');
+  const motivos = motivosRiesgo_(fila, salida);
+  if (motivos.length) salida.aviso = sumarAviso_(salida.aviso, 'Revisar: ' + motivos.join('; ') + '.');
+  return salida;
 }
 
 /** true si la respuesta acaba a media frase (sin punto, exclamación, emoji…). */
@@ -1313,6 +1431,9 @@ function llamarModelo_(modelo, sistema, usuario, esquema) {
     aviso: String(obj.aviso || '').trim(),
     traduccion: String(obj.traduccion || '').trim(),
     respuesta_es: String(obj.respuesta_es || '').trim(),
+    sentimiento: String(obj.sentimiento || ''),
+    empleado: String(obj.empleado || '').trim(),
+    sospecha: String(obj.sospecha || ''),
   };
 }
 
@@ -1443,6 +1564,260 @@ function idiomaDistinto_(idiomaResena, respuesta) {
 }
 
 
+// =========================================================== riesgo y calidad
+
+/**
+ * Palabras que mandan una reseña a revisión humana aunque tenga 4-5★. Se buscan en
+ * la reseña original y en su traducción, sin tildes ni mayúsculas. Cada entrada es
+ * una palabra o expresión exacta; con "*" al final vale cualquier terminación
+ * ("vomit*" = vomitar, vomited, vomito…). Se pueden añadir o quitar libremente.
+ */
+const PALABRAS_RIESGO = {
+  'salud o higiene': [
+    'intoxica*', 'vomit*', 'diarre*', 'hospital', 'hospitales', 'hospitaliz*', 'urgencias', 'enferm*',
+    'pelo en la comida', 'pelo en el plato', 'un pelo', 'cucaracha*', 'rata', 'ratas', 'crudo', 'cruda', 'podrid*',
+    'food poisoning', 'poisoned', 'threw up', 'diarrh*', 'hospitals', 'hospitalis*', 'emergency room', 'got sick',
+    'was sick', 'were sick', 'felt sick', 'hair in', 'a hair', 'cockroach*', 'rat', 'rats', 'raw', 'rotten', 'undercooked',
+    'lebensmittelvergiftung', 'vergiftung', 'erbroch*', 'ubergeben', 'durchfall', 'krankenhaus', 'notaufnahme',
+    'krank', 'erkrankt', 'haar im', 'kakerlake*', 'ratte*', 'roh', 'rohe', 'rohes', 'verdorben',
+    'intoxication', 'vomi', 'diarrhee', 'hopital', 'urgences', 'malade*', 'un cheveu', 'cafard*', 'blatte*', 'pourri*',
+    'intossicazione', 'ospedale', 'pronto soccorso', 'malat*', 'un capello', 'scarafagg*', 'ratto', 'topo', 'topi', 'marcio', 'marcia',
+    'voedselvergiftiging', 'overgeven', 'diarree', 'ziekenhuis', 'spoedeisende', 'ziek', 'kakkerlak*', 'rauw', 'bedorven', 'verrot*',
+  ],
+  'alergias': [
+    'alergi*', 'alergic*', 'celiac*', 'gluten', 'anafila*', 'intoleran*', 'allerg*', 'coeliac*', 'anaphyla*',
+    'zoliakie', 'unvertraglich*', 'coeliaque', 'celiaque', 'glutine', 'intolleran*', 'coeliakie', 'anafyla*',
+  ],
+  'temas legales': [
+    'abogad*', 'demanda*', 'denuncia*', 'policia', 'guardia civil', 'estafa*', 'timo', 'timad*', 'robo', 'robaron',
+    'robad*', 'hoja de reclamaciones', 'hoja de reclamacion', 'libro de reclamaciones', 'consumo', 'inspeccion*',
+    'lawyer*', 'solicitor*', 'sue you', 'sue them', 'will sue', 'suing', 'lawsuit', 'legal action', 'police', 'scam*',
+    'rip off', 'ripoff', 'robbed', 'stolen', 'theft', 'complaint form', 'trading standards', 'inspection', 'inspector*',
+    'anwalt*', 'rechtsanwalt*', 'klage', 'verklagen', 'anzeige', 'polizei', 'betrug*', 'abzocke*', 'gestohlen',
+    'diebstahl', 'beschwerdeformular', 'gesundheitsamt', 'ordnungsamt',
+    'avocat', 'avocats', 'plainte*', 'gendarm*', 'arnaque*', 'escroquerie*', 'escroc*', 'vole', 'volee', 'feuille de reclamation',
+    'avvocat*', 'querela', 'polizia', 'carabinieri', 'truffa*', 'fregatura', 'furto', 'rubat*', 'reclamo',
+    'advocaat', 'aanklacht', 'aangifte', 'politie', 'oplichting', 'oplichter*', 'diefstal', 'gestolen',
+  ],
+  'discriminación o agresión': [
+    'racista*', 'racismo', 'homofob*', 'machista*', 'machismo', 'xenofob*', 'agresion*', 'agredi*', 'insult*',
+    'amenaz*', 'acoso', 'acosad*', 'racist*', 'racism', 'homophob*', 'sexist*', 'assault*', 'threaten*', 'threat',
+    'threats', 'harass*', 'rassis*', 'sexistisch*', 'angegriffen', 'beleidig*', 'bedroh*', 'belastig*', 'raciste*',
+    'racisme', 'agress*', 'menac*', 'harcel*', 'razzis*', 'omofob*', 'sessis*', 'aggredi*', 'aggression*', 'minacc*',
+    'molesti*', 'homofo*', 'seksis*', 'agressie*', 'agressief', 'beledig*', 'bedreig*', 'intimidatie',
+  ],
+};
+
+/** Frases que suenan a plantilla o a IA: si aparecen, la respuesta no se publica sola. */
+const FRASES_PROHIBIDAS = [
+  'da gusto leer', 'que alegria leer', 'que bonito leer', 'muchas gracias por tu resena', 'nos alegra mucho',
+  'tu opinion es muy importante', 'experiencia inolvidable', 'a la altura', 'un monton', 'de diez', 'no tiene precio',
+  'joya escondida', 'sentimos que le caus*', 'sentimos que te caus*', 'sentimos que os caus*', 'sentimos haberle caus*',
+  'thank you so much for your review', 'we re thrilled', 'we are thrilled', 'we re delighted', 'we are delighted',
+  'lovely to read', 'your feedback means the world', 'hidden gem', 'unforgettable experience', 'culinary journey',
+  'delve', 'elevate',
+  'vielen dank fur ihre bewertung', 'schon zu lesen', 'es freut uns sehr', 'unvergessliches erlebnis',
+  'merci beaucoup pour votre avis', 'c est un plaisir de lire', 'nous sommes ravis', 'experience inoubliable',
+];
+
+/** Locales del grupo y cómo se reconocen (sin tildes, salvo los que son palabras comunes). */
+const LOCALES_GRUPO = [
+  { local: 'Mercader del Mar', re: /mercader/i },
+  { local: 'Alma Beach', re: /\bAlma\b/ },               // "alma" en minúscula es una palabra normal
+  { local: 'Amira Great Kebab', re: /amir[aä]/i },
+  { local: 'Balcón de María', re: /balc[oó]n de mar[ií]a/i },
+  { local: 'Madre Santa Pizza', re: /madre santa/i },
+  { local: 'Mestiza', re: /mestiz[aä]/i },
+  { local: 'Virtus Smash Burger', re: /virtus/i },
+  { local: 'Pecado 24H', re: /\bPecado\b/ },              // "pecado" en minúscula es una palabra normal
+  { local: 'Playas del Rey', re: /playas del rey/i },
+  { local: 'N76', re: /\bN ?76\b/i },
+];
+
+/** Texto en minúsculas, sin tildes y con solo letras y números separados por espacios. */
+function plano_(s) {
+  return ' ' + normalizar_(s).replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+}
+
+/** ¿Aparece la entrada ("palabra", "expresión" o "raíz*") en un texto ya pasado por plano_? */
+function contieneEntrada_(textoPlano, entrada) {
+  const raiz = /\*$/.test(entrada);
+  const e = plano_(entrada.replace(/\*$/, '')).trim();
+  return textoPlano.indexOf(' ' + e + (raiz ? '' : ' ')) >= 0;
+}
+
+/** Grupos de PALABRAS_RIESGO que aparecen en el texto, con la primera palabra encontrada. */
+function gruposDeRiesgo_(texto) {
+  const t = plano_(texto);
+  const grupos = [];
+  Object.keys(PALABRAS_RIESGO).forEach(g => {
+    const hallada = PALABRAS_RIESGO[g].find(p => contieneEntrada_(t, p));
+    if (hallada) grupos.push(g + ' («' + hallada.replace(/\*$/, '') + '»)');
+  });
+  return grupos;
+}
+
+/**
+ * Motivos para que una persona revise la reseña antes de publicar: palabras de
+ * riesgo, nota que no cuadra con el texto, negativa que nombra a un empleado o
+ * reseña sospechosa. "salida" (lo que devolvió la IA) es opcional.
+ */
+function motivosRiesgo_(f, salida) {
+  if (!CONFIG.ENRUTADO_RIESGO) return [];
+  const motivos = [];
+  const texto = String(f[COL.RESENA - 1] || '');
+  const traduccion = String(f[COL.TRADUCCION - 1] || (salida && salida.traduccion) || '');
+  const grupos = gruposDeRiesgo_(texto + ' \n ' + traduccion);
+  if (grupos.length) motivos.push('habla de ' + grupos.join(', '));
+  if (/reclamaci[oó]n/i.test(texto + ' ' + traduccion) && !grupos.some(g => /legales/.test(g))) {
+    motivos.push('menciona una reclamación');
+  }
+  if (salida) {
+    const est = Number(f[COL.ESTRELLAS - 1]);
+    if (texto && salida.sentimiento === 'negativo' && est >= 4) motivos.push('la nota (' + est + '★) no cuadra con el texto, que es negativo');
+    if (texto && salida.sentimiento === 'positivo' && est <= 2) motivos.push('la nota (' + est + '★) no cuadra con el texto, que es positivo');
+    if (salida.empleado && (est < CONFIG.MIN_ESTRELLAS_BORRADOR || salida.sentimiento === 'negativo')) {
+      motivos.push('es negativa y nombra a alguien del equipo (' + salida.empleado + ')');
+    }
+    const sospecha = { falsa: 'falsa', otro_negocio: 'de otro negocio', spam: 'spam' }[salida.sospecha];
+    if (sospecha) motivos.push('parece ' + sospecha + ': mejor no responderla y denunciarla en Google');
+  }
+  return motivos;
+}
+
+/**
+ * Filtro de calidad (reglas fijas, sin IA). Devuelve los problemas de la respuesta;
+ * vacío = se puede publicar. "extra" (opcional) trae lo que dijo la IA (empleado).
+ */
+function problemasCalidad_(respuesta, f, extra) {
+  if (!CONFIG.FILTRO_CALIDAD) return pareceCortada_(respuesta) ? ['parece cortada a media frase'] : [];
+  const r = String(respuesta || '').trim();
+  const texto = String(f[COL.RESENA - 1] || '');
+  const traduccion = String(f[COL.TRADUCCION - 1] || '');
+  const cliente = String(f[COL.CLIENTE - 1] || '');
+  const estrellas = Number(f[COL.ESTRELLAS - 1]);
+  const local = String(f[COL.RESTAURANTE - 1] || '');
+  const p = [];
+
+  const objetivo = esHistorica_(f[COL.ID - 1]) ? Math.min(25, palabrasObjetivo_(texto, estrellas))
+    : palabrasObjetivo_(texto, estrellas);
+  const palabras = r.split(/\s+/).filter(Boolean).length;
+  if (palabras > Math.ceil(objetivo * 1.1)) p.push('demasiado larga (' + palabras + ' palabras; máximo ' + Math.ceil(objetivo * 1.1) + ')');
+
+  const plana = plano_(r);
+  const frase = FRASES_PROHIBIDAS.find(x => contieneEntrada_(plana, x));
+  if (frase) p.push('usa una frase prohibida («' + frase.replace(/\*$/, '') + '»)');
+
+  // Los nombres de los locales ("Pecado 24H", "N76") no cuentan como cifras.
+  const sinLocales = s => LOCALES_GRUPO.reduce((t, l) => t.replace(new RegExp(l.re.source + (l.local === 'Pecado 24H' ? '\\s*24\\s*h\\b' : ''), 'gi'), ' '), String(s));
+  const limpia = sinLocales(r);
+  if (/\b24\s*(?:horas|hours|stunden|h)\b|\b24\s*\/\s*7\b/i.test(limpia)) p.push('dice «24 horas»');
+  if (/https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|es|net|org|de|eu|info|co\.uk)\b/i.test(r)) p.push('lleva una web');
+  if (/[^\s@]+@[^\s@]+\.[a-z]{2,}/i.test(r)) p.push('lleva un correo');
+  if (/(?:\+|\b)\d[\d ().-]{7,}\d\b/.test(r)) p.push('lleva un teléfono');
+
+  const numeros = s => (sinLocales(s).match(/\d+(?:[.,:]\d+)*/g) || []);
+  const permitidos = new Set(numeros(texto + ' ' + traduccion + ' ' + cliente).concat([String(estrellas)]));
+  const raros = numeros(r).filter(n => !permitidos.has(n));
+  if (raros.length) p.push('pone cifras que no están en la reseña (' + raros.slice(0, 3).join(', ') + ')');
+
+  const nombre = nombreNoEnResena_(r, f);
+  if (nombre) p.push('nombra a «' + nombre + '», que no sale en la reseña');
+
+  const propio = LOCALES_GRUPO.filter(l => l.re.test(local)).map(l => l.local);
+  const otros = LOCALES_GRUPO.filter(l => l.re.test(r) && propio.indexOf(l.local) < 0 &&
+    !(l.local === 'N76' && propio.indexOf('Playas del Rey') >= 0));
+  if (otros.length) p.push('menciona otro local del grupo (' + otros.map(l => l.local).join(', ') + ')');
+
+  const emojis = (r.match(/\p{Extended_Pictographic}/gu) || []).length;
+  if (emojis > 1) p.push('lleva ' + emojis + ' emojis (máximo 1)');
+  if ((r.match(/!/g) || []).length > 2) p.push('más de dos exclamaciones');
+  if (r.indexOf('—') >= 0) p.push('lleva raya larga (—)');
+
+  // Nombre completo = nombre y apellido (los nombres compuestos, como "Juan Luis", sí valen).
+  const partes = plano_(cliente).trim().split(' ').filter(x => x.length >= 2);
+  if (partes.length >= 2 && partes[0] !== partes[partes.length - 1] && contieneEntrada_(plana, partes[0]) &&
+    contieneEntrada_(plana, partes[partes.length - 1])) p.push('usa el nombre completo del cliente');
+  if (extra && extra.empleado && estrellas < CONFIG.MIN_ESTRELLAS_BORRADOR &&
+    contieneEntrada_(plana, String(extra.empleado))) p.push('repite el nombre del empleado en una negativa');
+
+  if (pareceCortada_(r)) p.push('parece cortada a media frase');
+  return p;
+}
+
+/** Palabras que se escriben con mayúscula sin ser nombres propios (o que siempre se permiten). */
+const MAYUSCULAS_PERMITIDAS = ('santa ponsa ponca mallorca majorca palma calvia google tripadvisor unicum espana spain ' +
+  'mediterranean spanish italian british english german french dutch irish scottish welsh european mallorcan majorcan ' +
+  'balearic monday tuesday wednesday thursday friday saturday sunday january february march april may june july ' +
+  'august september october november december christmas easter i u uw usted ud sie ihnen ihr ihre euch lei vous').split(' ');
+
+/** Primer nombre propio de la respuesta que no aparece en la reseña, el cliente o la ficha del local. */
+function nombreNoEnResena_(respuesta, f) {
+  const idioma = String(f[COL.IDIOMA - 1] || idiomaProbable_(respuesta) || '').slice(0, 2).toLowerCase();
+  // En alemán todos los sustantivos van con mayúscula; en los idiomas con declinación (polaco, checo,
+  // ruso…) los nombres cambian de forma y el tratamiento de cortesía va con mayúscula.
+  if (['de', 'pl', 'cs', 'sk', 'ru', 'uk', 'hu', 'fi', 'lt', 'lv', 'et', 'hr', 'sl', 'sr', 'bg', 'el', 'tr'].indexOf(idioma) >= 0) return '';
+  if (/[äöüß]|\b(?:und|der|die|das|danke|wir|ihnen|uns)\b/i.test(respuesta)) return ''; // alemán corto sin detectar
+  const nombres = plano_(f[COL.CLIENTE - 1]).trim().split(' ').filter(n => n.length >= 3);
+  const rest = buscarRestaurantePorNombre_(leerRestaurantes_(), f[COL.RESTAURANTE - 1]) || {};
+  const conocidas = new Set(plano_([f[COL.RESENA - 1], f[COL.TRADUCCION - 1], f[COL.CLIENTE - 1], f[COL.RESTAURANTE - 1],
+    rest.ciudad, rest.notas, rest.keywords].join(' ')).trim().split(' ').concat(MAYUSCULAS_PERMITIDAS));
+  const re = /([.!?¡¿…:;\n"“«(]|\p{Extended_Pictographic})|(\p{L}[\p{L}'’-]*)/gu;
+  let inicio = true, m;
+  while ((m = re.exec(respuesta))) {
+    if (m[1]) { inicio = true; continue; }
+    const w = m[2];
+    if (!inicio && /^\p{Lu}/u.test(w) && w.length > 1) {
+      const trozos = plano_(w).trim().split(' ');
+      // El nombre del cliente cuenta aunque cambie la terminación (Maja → Majo, Andrés → Andrésito).
+      const delCliente = t => nombres.some(n => t.slice(0, 3) === n.slice(0, 3) && Math.abs(t.length - n.length) <= 3);
+      if (!trozos.every(t => conocidas.has(t) || delCliente(t))) return w;
+    }
+    inicio = false;
+  }
+  return '';
+}
+
+/** Junta avisos en la columna "Aviso IA" sin repetir. */
+function sumarAviso_(aviso, extra) {
+  if (!extra) return aviso || '';
+  return aviso && aviso.indexOf(extra) >= 0 ? aviso : (aviso ? aviso + ' ' : '') + extra;
+}
+
+/** Pasa una fila a "Revisar ⚠" (salvo las negativas, que ya son a mano) con el motivo en el aviso. */
+function marcarRevisar_(hoja, id, motivo) {
+  conBloqueo_(() => {
+    const m = filaPorId_(hoja, id);
+    if (!m) return;
+    const estado = hoja.getRange(m, COL.ESTADO).getValue();
+    if (estado !== ESTADO.MANO) hoja.getRange(m, COL.ESTADO).setValue(ESTADO.REVISAR);
+    const aviso = hoja.getRange(m, COL.AVISO);
+    aviso.setValue(sumarAviso_(String(aviso.getValue() || ''), motivo));
+  });
+}
+
+/** Revisión de un borrador ya escrito (sin IA): motivos de riesgo y problemas de calidad. */
+function motivosParaRevisar_(f, texto) {
+  const motivos = motivosRiesgo_(f, null);
+  const calidad = problemasCalidad_(texto, f);
+  const partes = [];
+  if (motivos.length) partes.push('Revisar: ' + motivos.join('; ') + '.');
+  if (calidad.length) partes.push('Filtro de calidad: ' + calidad.join('; ') + '.');
+  return partes.join(' ');
+}
+
+/** Al actualizar: pasa a revisión los borradores abiertos que no pasan los controles nuevos. */
+function revisarBorradoresAbiertos_() {
+  const hoja = hoja_(HOJA.RESPUESTAS);
+  if (hoja.getLastRow() < 2) return;
+  hoja.getRange(2, 1, hoja.getLastRow() - 1, CABECERA.length).getValues().forEach(f => {
+    if (f[COL.ESTADO - 1] !== ESTADO.PENDIENTE || !f[COL.RESPUESTA - 1] || f[COL.AVISO - 1]) return;
+    const motivo = motivosParaRevisar_(f, f[COL.RESPUESTA - 1]);
+    if (motivo) marcarRevisar_(hoja, f[COL.ID - 1], motivo);
+  });
+}
+
+
 // ===================================================== publicación automática
 
 /**
@@ -1517,7 +1892,12 @@ function publicarAutomaticas_() {
     Math.floor(creditosSobrantes_() / CREDITOS.RESPUESTA_ANTIGUA)));
   const antiguas = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK_HISTORICO')
     ? listas.filter(f => esHistorica_(f[COL.ID - 1])).slice(0, libres) : [];
-  const candidatas = nuevas.concat(antiguas).slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
+  // Controles antes de publicar: lo que no los pasa va a "Revisar ⚠" con el motivo.
+  const candidatas = nuevas.concat(antiguas).filter(f => {
+    const motivo = motivosParaRevisar_(f, f[COL.RESPUESTA - 1]);
+    if (motivo) marcarRevisar_(hoja, f[COL.ID - 1], motivo);
+    return !motivo;
+  }).slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
   for (const f of candidatas) {
     try {
       publicarFila_(f[COL.ID - 1], f[COL.RESPUESTA - 1]);
@@ -1530,7 +1910,7 @@ function publicarAutomaticas_() {
 }
 
 /** Envía una respuesta a Make y deja la fila como publicada (o enviada). Devuelve el estado nuevo. */
-function publicarFila_(id, texto) {
+function publicarFila_(id, texto, forzar) {
   const url = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK');
   if (!url) throw new Error('La publicación automática no está configurada (menú Reseñas → Publicación automática).');
   const hoja = hoja_(HOJA.RESPUESTAS);
@@ -1540,8 +1920,12 @@ function publicarFila_(id, texto) {
   if (f[COL.PLATAFORMA - 1] !== 'Google') throw new Error('Solo se puede publicar automáticamente en Google.');
   const respuesta = String(texto || f[COL.RESPUESTA - 1] || '').trim();
   if (!respuesta) throw new Error('No hay respuesta que publicar.');
-  if (pareceCortada_(respuesta)) {
-    throw new Error('la respuesta parece cortada (acaba en "…' + respuesta.slice(-30) + '"). Termínala antes de publicar.');
+  const problemas = forzar ? [] : problemasCalidad_(respuesta, f);
+  if (problemas.length) {
+    const e = new Error('Filtro de calidad: ' + problemas.join('; ') + '.' + (pareceCortada_(respuesta)
+      ? ' (Acaba en "…' + respuesta.slice(-30) + '"; termínala antes de publicar.)' : ''));
+    e.calidad = true;
+    throw e;
   }
   const rest = buscarRestaurantePorNombre_(leerRestaurantes_(), f[COL.RESTAURANTE - 1]);
   if (rest && !rest.activo) throw new Error('Ese local está desactivado en la pestaña Restaurantes: no se publica.');
@@ -1894,7 +2278,8 @@ function actualizarHojaCreditos_() {
     ['Actualizado', Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm')],
     ['', ''],
     ['Todo lo que se hace con Make gasta de estos créditos: publicar reseñas (unos 5 por reseña), las antiguas ' +
-      'y otros usos como consultar fichas o publicar posts. Se actualiza sola cada media hora.', ''],
+      'y otros usos como consultar fichas o publicar posts. La comprobación de las 48 h no gasta (usa Apify). ' +
+      'Se actualiza sola cada media hora.', ''],
   ];
   hoja.getRange(1, 1, Math.max(hoja.getLastRow(), filas.length), 2).clearContent();
   hoja.getRange(1, 1, filas.length, 2).setValues(filas);
@@ -2152,7 +2537,7 @@ function colaAccion(id, accion, datos) {
   if (accion === 'rehacerTodo') return { cuantos: vaciarBorradores_() };
   if (accion === 'traducir') return traducirDesdeEspanol_(id, datos.texto);
   if (accion === 'publicarYa') {
-    const estado = publicarFila_(id, datos.texto);
+    const estado = publicarFila_(id, datos.texto, !!datos.forzar);
     conBloqueo_(actualizarHojaPublicadas_);
     const hoja = hoja_(HOJA.RESPUESTAS);
     const m = filaPorId_(hoja, id);
@@ -2173,6 +2558,8 @@ function colaAccion(id, accion, datos) {
     const valores = hoja.getRange(n, 1, 1, CABECERA.length).getValues()[0];
     if (accion === 'publicada') {
       hoja.getRange(n, COL.ESTADO).setValue(ESTADO.PUBLICADA);
+      hoja.getRange(n, COL.ESTADO).setNote('Marcada como publicada el ' +
+        Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm'));
       const texto = String(datos.texto || '').trim();
       if (texto) {
         hoja.getRange(n, COL.PUBLICADA).setValue(texto);

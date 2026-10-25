@@ -7,7 +7,7 @@ estilo de la casa. Publicas desde el móvil con dos toques.
 ## Qué hace
 
 - **Lee las reseñas nuevas** de Google Maps cada hora y las de TripAdvisor
-  cada 12 h. Un repaso diario recoge las que Google publica con retraso y,
+  cada 12 h. Un repaso diario (últimos 4 días) recoge las que Google publica con retraso y,
   una vez por semana, repasa el último mes: las que alguien respondió
   directamente en Google salen solas de la cola.
 - **Redacta un borrador** para las de 4-5★, en el idioma del cliente, y
@@ -311,6 +311,44 @@ Si hubiera que rehacerlo, el escenario es:
 - Activado (**ON**, *Immediately*).
 
 El avance se ve en **Reseñas → 📜 Reseñas antiguas de Google**.
+
+## Controles antes de publicar
+
+Cuatro controles para que no se publique nada delicado sin que lo vea una
+persona. Lo que no los pasa queda en **Revisar ⚠** con el motivo en **Aviso
+IA** (en la cola, en *Responder*).
+
+1. **Enrutado por riesgo.** Va a revisión aunque tenga 4-5★ si la reseña
+   habla de salud o higiene, alergias, temas legales (hoja de reclamaciones,
+   denuncias, policía…) o discriminación y agresiones, en español, inglés,
+   alemán, francés, italiano y neerlandés. La lista está en `PALABRAS_RIESGO`,
+   al principio de la sección *riesgo y calidad* de `Code.gs`: se pueden añadir
+   o quitar palabras (con `*` al final vale cualquier terminación). También va
+   a revisión si la nota no cuadra con el texto (5★ con texto negativo o
+   sarcástico, según la IA), si es negativa y nombra a un empleado, o si parece
+   falsa, de otro negocio o spam (mejor no responderla y denunciarla en Google).
+2. **Filtro de calidad** (reglas fijas, sin IA): longitud máxima + 10 %, frases
+   de plantilla (`FRASES_PROHIBIDAS`), «24 horas», webs, correos y teléfonos,
+   cifras u horas que no estén en la reseña, nombres que no salgan en la reseña,
+   otros locales del grupo (N76 sí en Playas del Rey), más de un emoji o de dos
+   exclamaciones, raya larga, nombre y apellido del cliente, repetir el nombre
+   de un empleado en una negativa y respuestas cortadas. Si un borrador de la IA
+   no lo pasa, se le pide una vez otra versión diciendo qué corregir. Al pulsar
+   **Publicar en Google** en la cola, si el texto no lo pasa, la cola avisa y
+   pregunta si publicarla igualmente (por si está escrito así a propósito).
+3. **Casos especiales en el prompt**: alergias y salud, empleados, reseñas
+   falsas o de otro negocio, hoja de reclamaciones, datos personales y no
+   admitir culpa. Si habíais cambiado la pestaña *Prompt*, no se toca.
+4. **Comprobación a las 48 h.** Las lecturas de Google (repaso diario de los
+   últimos 4 días y repaso semanal del mes) traen las respuestas que se ven en
+   Google. Si una publicada hace más de 48 h sale sin respuesta, pasa a
+   **Revisar ⚠** con el aviso «No visible en Google…» (puede estar retenida
+   por la moderación o no haberse pegado). Cuando se vea, vuelve sola a
+   publicada. **No gasta créditos de Make.** Vale para las reseñas del último
+   mes; las publicadas a mano desde la cola también cuentan.
+
+**Desactivarlos:** en `CONFIG`, al principio de `Code.gs`, poned `false` en
+`ENRUTADO_RIESGO`, `FILTRO_CALIDAD` o `VERIFICAR_48H` y guardad 💾.
 
 ## Créditos de Make
 

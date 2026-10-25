@@ -364,13 +364,13 @@
   }
 
   // Publicar en Google vía Make: se mueve al momento y, si Make falla, vuelve con el motivo.
-  function publicarGoogle(r, texto) {
+  function publicarGoogle(r, texto, forzar) {
     const antes = { estado: r.estado, publicada: r.publicada };
     r.estado = 'Enviada a Google ⏳';
     r.publicada = texto;
     pintar();
     aviso('Publicando en Google…');
-    llamar('colaAccion', [r.id, 'publicarYa', { texto: texto }], res => {
+    llamar('colaAccion', [r.id, 'publicarYa', { texto: texto, forzar: !!forzar }], res => {
       r.estado = (res && res.estado) || 'Enviada a Google ⏳';
       if (res && res.publicada) r.publicada = res.publicada;
       pintar();
@@ -378,7 +378,12 @@
     }, e => {
       r.estado = antes.estado; r.publicada = antes.publicada;
       pintar();
-      aviso('No se publicó: ' + e.message);
+      const m = String(e.message || e);
+      // El filtro de calidad para lo que parece un error; si lo habéis escrito así a propósito, se puede publicar igual.
+      if (/Filtro de calidad/.test(m) && confirm(m.replace(/^Error:\s*/, '') + '\n\n¿Publicarla igualmente?')) {
+        return publicarGoogle(r, texto, true);
+      }
+      aviso('No se publicó: ' + m);
     }, true); // sin tope: si hay que buscarla entre las antiguas tarda más
   }
 
