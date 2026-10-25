@@ -1,0 +1,35 @@
+name: Review Bot (Google)
+
+on:
+  schedule:
+    # Cada hora entre las ~10:00 y ~21:00 de Madrid (GitHub usa UTC).
+    # En invierno Madrid es UTC+1 y en verano UTC+2; este rango cubre ambos
+    # casos y la ventana horaria real la aplica el propio bot (config.yaml).
+    - cron: "15 7-20 * * *"
+  workflow_dispatch: {}   # permite lanzarlo a mano desde la pestaña Actions
+
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r review-bot/requirements.txt
+
+      - name: Run bot
+        working-directory: review-bot
+        env:
+          GBP_CLIENT_ID: ${{ secrets.GBP_CLIENT_ID }}
+          GBP_CLIENT_SECRET: ${{ secrets.GBP_CLIENT_SECRET }}
+          GBP_REFRESH_TOKEN: ${{ secrets.GBP_REFRESH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Cambia a "false" en Settings → Secrets and variables → Actions →
+          # Variables cuando quieras que publique de verdad.
+          DRY_RUN: ${{ vars.DRY_RUN || 'true' }}
+        run: python -m reviewbot run
