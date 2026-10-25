@@ -44,6 +44,13 @@ const CONFIG = {
   // --- Redacción (Gemini API, capa gratuita) ---
   // Se prueba en este orden; si uno agota su cupo diario, se pasa al
   // siguiente. Flash redacta mejor pero da pocas peticiones gratis al día.
+  // DeepSeek redacta primero (si hay clave DEEPSEEK_API_KEY); si falla o no hay clave, la cadena de Gemini.
+  // Para volver a solo Gemini: DEEPSEEK: false (o "borrar" la clave en Reseñas → Cambiar claves).
+  DEEPSEEK: true,
+  DEEPSEEK_MODELO: 'deepseek-flash',
+  DEEPSEEK_MAX_TOKENS: 4000,             // razona antes de responder: con menos de 2000 a veces no le llega
+  DEEPSEEK_PRECIO_ENTRADA: 0.30,         // $ por millón de tokens (estimación alta, para el gasto aproximado)
+  DEEPSEEK_PRECIO_SALIDA: 1.20,
   MODELOS: ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemma-4-31b-it'],
   // Las reseñas sin texto o muy cortas empiezan en este modelo (posición
   // en MODELOS, desde 0) para reservar el cupo del mejor a las largas.
@@ -509,6 +516,9 @@ function cambiarClaves() {
 const CLAVES = [
   { nombre: 'APIFY_TOKEN', texto: 'Pega tu token de Apify (console.apify.com → Settings → API & Integrations → Personal API token):', probar: probarApify_ },
   { nombre: 'GEMINI_API_KEY', texto: 'Pega tu clave de Gemini (aistudio.google.com → Get API key):', probar: probarGemini_ },
+  { nombre: 'DEEPSEEK_API_KEY', opcional: true, probar: probarDeepseek_,
+    texto: 'Opcional: clave de DeepSeek (platform.deepseek.com → API keys). Con ella redacta DeepSeek y Gemini queda de reserva.\n' +
+      'Escribe "borrar" para quitarla y usar solo Gemini.' },
 ];
 
 /**
@@ -520,16 +530,18 @@ function pedirClaves_(todas) {
   const ui = SpreadsheetApp.getUi();
   const props = PropertiesService.getScriptProperties();
   for (const c of CLAVES) {
-    if (!todas && props.getProperty(c.nombre)) continue;
+    if (!todas && (props.getProperty(c.nombre) || c.opcional)) continue;
     for (;;) {
       const r = ui.prompt('Clave ' + c.nombre, c.texto + (todas ? '\n(Vacío = mantener la actual)' : ''),
         ui.ButtonSet.OK_CANCEL);
       if (r.getSelectedButton() !== ui.Button.OK) {
+        if (c.opcional) break;
         ui.alert('Instalación pausada: sin esa clave el sistema no puede funcionar. Vuelve a pulsar "Instalar" cuando la tengas.');
         return false;
       }
       const valor = r.getResponseText().trim();
-      if (!valor && todas && props.getProperty(c.nombre)) break;
+      if (c.opcional && valor.toLowerCase() === 'borrar') { props.deleteProperty(c.nombre); break; }
+      if (!valor && ((todas && props.getProperty(c.nombre)) || c.opcional)) break;
       const error = valor ? c.probar(valor) : 'está vacía';
       if (!error) { props.setProperty(c.nombre, valor); break; }
       ui.alert('Esa clave no funciona (' + error + '). Revisa que la copiaste entera y vuelve a pegarla.');
@@ -546,6 +558,13 @@ function probarApify_(token) {
 }
 
 /** Devuelve '' si la clave de Gemini funciona, o el motivo del fallo. */
+/** Devuelve '' si la clave de DeepSeek funciona, o el motivo del fallo. */
+function probarDeepseek_(clave) {
+  const res = UrlFetchApp.fetch('https://api.deepseek.com/models', {
+    headers: { Authorization: 'Bearer ' + clave }, muteHttpExceptions: true });
+  return res.getResponseCode() === 200 ? '' : 'DeepSeek respondió ' + res.getResponseCode();
+}
+
 function probarGemini_(clave) {
   const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
     headers: { 'x-goog-api-key': clave }, muteHttpExceptions: true });
@@ -1034,7 +1053,7 @@ function generarPendientes_(inicio) {
         });
       }
       hechos++;
-      Utilities.sleep(geminiPago_() ? 1500 : CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
+      Utilities.sleep(deepseekActivo_() ? 1000 : geminiPago_() ? 1500 : CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
     }
     comprobarAtasco_(Math.max(0, pendientes.length - hechos));
 
@@ -1057,7 +1076,7 @@ function generarPendientes_(inicio) {
         if (n && h.getRange(n, COL.RESPUESTA).getValue() === fila[COL.RESPUESTA - 1]) h.getRange(n, COL.RESP_ES).setValue(es);
       });
       hechos++;
-      Utilities.sleep(geminiPago_() ? 1500 : CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
+      Utilities.sleep(deepseekActivo_() ? 1000 : geminiPago_() ? 1500 : CONFIG.PAUSA_ENTRE_LLAMADAS_MS);
     }
   } finally {
     props.deleteProperty('GENERANDO_HASTA');
@@ -1333,6 +1352,25 @@ function nombreIdioma_(codigo) {
  * "esquema" (informe semanal) solo usa los Gemini, que devuelven JSON.
  */
 function llamarIA_(sistema, usuario, desde, esquema) {
+  if (deepseekActivo_()) {
+    try {
+      const salida = llamarDeepseek_(sistema, usuario, esquema);
+      salida.modelo = CONFIG.DEEPSEEK_MODELO;
+      return salida;
+    } catch (e) {
+      // Cualquier fallo de DeepSeek (HTTP, vacío, JSON roto, red): se sigue con Gemini.
+      PropertiesService.getScriptProperties().setProperties({
+        ULTIMO_ERROR_IA: Utilities.formatDate(new Date(), ZONA, 'dd/MM HH:mm') + ' · ' + String(e.message || e).slice(0, 200),
+        ULTIMO_ERROR_IA_MS: String(Date.now()),
+      });
+      if (e.tipo === 'cuota' || e.tipo === 'temporal') pausarModelo_(CONFIG.DEEPSEEK_MODELO, 2 * MIN);
+      if (e.tipo === 'clave' || e.tipo === 'roto') {
+        pausarModelo_(CONFIG.DEEPSEEK_MODELO, 6 * HORA);
+        avisarError_('deepseek', 'DeepSeek no funciona (' + e.message + '): mientras tanto redacta Gemini. ' +
+          'Revisa la clave y el saldo en platform.deepseek.com (Reseñas → Cambiar claves para pegar otra).');
+      }
+    }
+  }
   const modelos = CONFIG.MODELOS.slice(Math.min(desde, CONFIG.MODELOS.length - 1))
     .filter(m => !esquema || m.indexOf('gemini') === 0);
   for (const modelo of modelos) {
@@ -1371,6 +1409,114 @@ function llamarIA_(sistema, usuario, desde, esquema) {
   const err = new Error('Ningún modelo de IA tiene cupo ahora; se reintentará más tarde.');
   err.limite = true;
   throw err;
+}
+
+/** ¿Hay que probar DeepSeek primero? (activado, con clave y sin pausa por fallos recientes) */
+function deepseekActivo_() {
+  return CONFIG.DEEPSEEK && Boolean(PropertiesService.getScriptProperties().getProperty('DEEPSEEK_API_KEY')) &&
+    !modeloEnPausa_(CONFIG.DEEPSEEK_MODELO);
+}
+
+/** Describe un esquema (el mismo que usa Gemini) para pedir ese JSON a DeepSeek. */
+function esquemaATexto_(esq, sangria) {
+  sangria = sangria || '';
+  return Object.keys(esq.properties).map(k => {
+    const p = esq.properties[k];
+    let tipo = p.enum ? 'uno de: ' + p.enum.map(v => '"' + v + '"').join(', ')
+      : p.type === 'ARRAY' ? 'lista' + (p.items.type === 'OBJECT' ? ' de objetos con:\n' + esquemaATexto_(p.items, sangria + '    ') : ' de textos')
+      : 'texto';
+    return sangria + '- "' + k + '" (' + tipo + ')' + (p.description ? ': ' + p.description : '');
+  }).join('\n');
+}
+
+/**
+ * DeepSeek (API compatible con OpenAI). Razona antes de responder, así que lleva
+ * margen de tokens; contenido vacío, corte por longitud o JSON ilegible = fallo.
+ */
+function llamarDeepseek_(sistema, usuario, esquema) {
+  const esq = esquema || ESQUEMA_RESPUESTA;
+  const cuerpo = {
+    model: CONFIG.DEEPSEEK_MODELO,
+    max_tokens: CONFIG.DEEPSEEK_MAX_TOKENS,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: sistema },
+      { role: 'user', content: usuario + '\n\nDevuelve SOLO un objeto JSON con estas claves:\n' + esquemaATexto_(esq) },
+    ],
+  };
+  const res = UrlFetchApp.fetch('https://api.deepseek.com/chat/completions', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + prop_('DEEPSEEK_API_KEY') },
+    muteHttpExceptions: true,
+    payload: JSON.stringify(cuerpo),
+  });
+  const codigo = res.getResponseCode();
+  const bruto = res.getContentText();
+  const fallo = tipo => {
+    const e = new Error('DeepSeek respondió ' + codigo + ': ' + bruto.slice(0, 200));
+    e.tipo = tipo;
+    return e;
+  };
+  if (codigo === 401 || codigo === 402 || codigo === 403) throw fallo('clave'); // 402 = sin saldo
+  if (codigo === 429) throw fallo('cuota');
+  if (codigo >= 500) throw fallo('temporal');
+  if (codigo === 400 || codigo === 404 || codigo === 422) throw fallo('roto');
+  if (codigo !== 200) throw fallo('otro');
+  const datos = JSON.parse(bruto);
+  apuntarGastoDeepseek_(datos.usage);
+  const opcion = (datos.choices || [])[0] || {};
+  const texto = String((opcion.message || {}).content || '').trim();
+  if (!texto || opcion.finish_reason === 'length') {
+    const e = new Error('DeepSeek devolvió una respuesta vacía o cortada (' + (opcion.finish_reason || 'sin motivo') + ')');
+    e.tipo = 'vacio';
+    throw e;
+  }
+  let obj;
+  try {
+    obj = JSON.parse(texto.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+  } catch (e) {
+    const err = new Error('DeepSeek devolvió un JSON ilegible');
+    err.tipo = 'vacio';
+    throw err;
+  }
+  if (esquema) return obj;
+  if (!obj.respuesta) {
+    const e = new Error('DeepSeek no devolvió "respuesta"');
+    e.tipo = 'vacio';
+    throw e;
+  }
+  return {
+    respuesta: limpiarRespuesta_(obj.respuesta),
+    aviso: String(obj.aviso || '').trim(),
+    traduccion: String(obj.traduccion || '').trim(),
+    respuesta_es: String(obj.respuesta_es || '').trim(),
+    sentimiento: String(obj.sentimiento || ''),
+    empleado: String(obj.empleado || '').trim(),
+    sospecha: String(obj.sospecha || ''),
+  };
+}
+
+/** Acumula los tokens de DeepSeek del mes (para el gasto aproximado). */
+function apuntarGastoDeepseek_(uso) {
+  if (!uso) return;
+  const props = PropertiesService.getScriptProperties();
+  const mes = Utilities.formatDate(new Date(), ZONA, 'yyyy-MM');
+  const g = JSON.parse(props.getProperty('DEEPSEEK_USO') || '{}');
+  const a = g.mes === mes ? g : { mes: mes, llamadas: 0, entrada: 0, salida: 0 };
+  a.llamadas++;
+  a.entrada += Number(uso.prompt_tokens) || 0;
+  a.salida += Number(uso.completion_tokens) || 0;
+  props.setProperty('DEEPSEEK_USO', JSON.stringify(a));
+}
+
+/** Gasto de DeepSeek de este mes: { llamadas, entrada, salida, dolares }. */
+function gastoDeepseek_() {
+  const mes = Utilities.formatDate(new Date(), ZONA, 'yyyy-MM');
+  const g = JSON.parse(PropertiesService.getScriptProperties().getProperty('DEEPSEEK_USO') || '{}');
+  const a = g.mes === mes ? g : { llamadas: 0, entrada: 0, salida: 0 };
+  a.dolares = (a.entrada * CONFIG.DEEPSEEK_PRECIO_ENTRADA + a.salida * CONFIG.DEEPSEEK_PRECIO_SALIDA) / 1e6;
+  return a;
 }
 
 function llamarModelo_(modelo, sistema, usuario, esquema) {
@@ -2278,6 +2424,12 @@ function actualizarHojaCreditos_() {
       '. Si se acaban, las respuestas no se publican solas (habrá que hacerlas a mano desde la cola).'],
     ['Sobran para las reseñas antiguas', Math.max(0, creditosSobrantes_())],
     ['Actualizado', Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy HH:mm')],
+    ['', ''],
+    ['DeepSeek este mes (redacción)', (() => {
+      const d = gastoDeepseek_();
+      return d.llamadas + ' llamadas · ' + d.entrada + ' tokens de entrada y ' + d.salida + ' de salida · unos ' +
+        d.dolares.toFixed(2) + ' $' + (deepseekActivo_() ? '' : ' (ahora redacta Gemini)');
+    })()],
     ['', ''],
     ['Todo lo que se hace con Make gasta de estos créditos: publicar reseñas (unos 5 por reseña), las antiguas ' +
       'y otros usos como consultar fichas o publicar posts. La comprobación de las 48 h no gasta (usa Apify). ' +

@@ -430,6 +430,23 @@ Si se agotan todos, lo pendiente se redacta en la siguiente vuelta.
 Apify**) para confirmar las cifras. Recuperar las reseñas del último mes
 cuesta unos céntimos.
 
+## Redacción con DeepSeek (Gemini de reserva)
+
+Si hay clave de DeepSeek, redacta **DeepSeek** (`deepseek-flash`) todas las
+reseñas, largas y cortas. Si falla (error, respuesta vacía o cortada, JSON
+ilegible) o no hay clave, ese intento pasa a la cadena de Gemini de siempre.
+La columna **Modelo** dice quién respondió. Si DeepSeek rechaza la clave o se
+queda sin saldo, llega un correo y durante 6 horas redacta solo Gemini.
+
+- **Pegar la clave:** Reseñas → 🔑 Cambiar claves → en las dos primeras
+  (Apify y Gemini) dejad el campo vacío y pulsad **Aceptar** (se mantienen) →
+  en *DEEPSEEK_API_KEY* pegad la clave de platform.deepseek.com y **Aceptar**.
+  Se comprueba al guardarla.
+- **Volver a solo Gemini:** en esa misma pantalla escribid `borrar`, o poned
+  `DEEPSEEK: false` en `CONFIG`.
+- **Gasto:** la pestaña *Créditos Make* muestra las llamadas, los tokens y el
+  gasto aproximado de DeepSeek del mes (precios en `CONFIG`, estimación alta).
+
 ## Gemini de pago (recomendado si os importa la calidad)
 
 Con la facturación activada, **todas** las respuestas van con el mejor
