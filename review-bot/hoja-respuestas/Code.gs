@@ -1893,11 +1893,13 @@ function publicarAutomaticas_() {
   const antiguas = PropertiesService.getScriptProperties().getProperty('MAKE_WEBHOOK_HISTORICO')
     ? listas.filter(f => esHistorica_(f[COL.ID - 1])).slice(0, libres) : [];
   // Controles antes de publicar: lo que no los pasa va a "Revisar ⚠" con el motivo.
-  const candidatas = nuevas.concat(antiguas).filter(f => {
+  const candidatas = [];
+  for (const f of nuevas.concat(antiguas)) {
+    if (candidatas.length >= CONFIG.PUBLICACIONES_POR_VUELTA) break;
     const motivo = motivosParaRevisar_(f, f[COL.RESPUESTA - 1]);
     if (motivo) marcarRevisar_(hoja, f[COL.ID - 1], motivo);
-    return !motivo;
-  }).slice(0, CONFIG.PUBLICACIONES_POR_VUELTA);
+    else candidatas.push(f);
+  }
   for (const f of candidatas) {
     try {
       publicarFila_(f[COL.ID - 1], f[COL.RESPUESTA - 1]);
